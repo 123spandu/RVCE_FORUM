@@ -8,16 +8,9 @@ USE campus_connect;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
-DROP TABLE IF EXISTS reports;
-DROP TABLE IF EXISTS audit_logs;
 DROP TABLE IF EXISTS chat_messages;
 DROP TABLE IF EXISTS chat_group_members;
 DROP TABLE IF EXISTS chat_groups;
-DROP TABLE IF EXISTS post_analytics;
-DROP TABLE IF EXISTS bookmarks;
-DROP TABLE IF EXISTS notifications;
-DROP TABLE IF EXISTS notification_preferences;
-DROP TABLE IF EXISTS push_subscriptions;
 DROP TABLE IF EXISTS posts;
 DROP TABLE IF EXISTS subscriptions;
 DROP TABLE IF EXISTS channels;
@@ -117,63 +110,7 @@ CREATE TABLE IF NOT EXISTS posts (
   FULLTEXT INDEX idx_search (title, body)
 ) ENGINE=InnoDB;
 
--- 7. WebPush Subscriptions Table
-CREATE TABLE IF NOT EXISTS push_subscriptions (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  endpoint TEXT NOT NULL,
-  p256dh VARCHAR(255) NOT NULL,
-  auth VARCHAR(255) NOT NULL,
-  user_agent VARCHAR(255) NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_endpoint (user_id, endpoint(255)),
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
--- 8. User Preferences
-CREATE TABLE IF NOT EXISTS notification_preferences (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT UNIQUE NOT NULL,
-  mute_meetings BOOLEAN DEFAULT FALSE,
-  mute_circulars BOOLEAN DEFAULT FALSE,
-  mute_hackathons BOOLEAN DEFAULT FALSE,
-  daily_digest BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
--- 9. In-App Notifications
-CREATE TABLE IF NOT EXISTS notifications (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  post_id INT NOT NULL,
-  is_read BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
--- 10. Bookmarks Table
-CREATE TABLE IF NOT EXISTS bookmarks (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  post_id INT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_bookmark (user_id, post_id),
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
--- 11. Post Analytics Table
-CREATE TABLE IF NOT EXISTS post_analytics (
-  post_id INT PRIMARY KEY,
-  notifications_sent INT DEFAULT 0,
-  notifications_opened INT DEFAULT 0,
-  unique_views INT DEFAULT 0,
-  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
--- 12. Chat Groups Table
+-- 7. Chat Groups Table
 CREATE TABLE IF NOT EXISTS chat_groups (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
@@ -185,7 +122,7 @@ CREATE TABLE IF NOT EXISTS chat_groups (
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
--- 13. Chat Group Members Table
+-- 8. Chat Group Members Table
 CREATE TABLE IF NOT EXISTS chat_group_members (
   id INT AUTO_INCREMENT PRIMARY KEY,
   group_id INT NOT NULL,
@@ -197,7 +134,7 @@ CREATE TABLE IF NOT EXISTS chat_group_members (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 14. Chat Messages Table
+-- 9. Chat Messages Table
 CREATE TABLE IF NOT EXISTS chat_messages (
   id INT AUTO_INCREMENT PRIMARY KEY,
   group_id INT NOT NULL,
@@ -206,28 +143,6 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (group_id) REFERENCES chat_groups(id) ON DELETE CASCADE,
   FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
--- 15. Audit Logs Table
-CREATE TABLE IF NOT EXISTS audit_logs (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  actor_id INT NOT NULL,
-  action VARCHAR(100) NOT NULL,
-  details TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
--- 16. Reports Table
-CREATE TABLE IF NOT EXISTS reports (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  reporter_id INT NOT NULL,
-  post_id INT NOT NULL,
-  reason VARCHAR(255) NOT NULL,
-  status ENUM('pending', 'reviewed', 'ignored') NOT NULL DEFAULT 'pending',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- Seed Data (Basic Departments)
