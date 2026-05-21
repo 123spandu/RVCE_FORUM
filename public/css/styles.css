@@ -1,0 +1,99 @@
+/* Campus Connect – custom styles */
+:root {
+  --cc-primary: #0d6efd;
+  --cc-radius: 14px;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ===== Login page ===== */
+.login-bg {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  border-radius: var(--cc-radius);
+}
+
+.brand-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0d6efd, #6610f2);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  box-shadow: 0 6px 18px rgba(13, 110, 253, .35);
+}
+
+/* ===== App ===== */
+.nav-tabs .nav-link {
+  color: #495057;
+  font-weight: 500;
+  border: none;
+  border-bottom: 3px solid transparent;
+}
+.nav-tabs .nav-link.active {
+  color: var(--cc-primary);
+  background: transparent;
+  border-bottom: 3px solid var(--cc-primary);
+}
+
+.post-card {
+  background: #fff;
+  border-radius: var(--cc-radius);
+  border: 1px solid rgba(0, 0, 0, .06);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+  transition: box-shadow .15s ease;
+}
+.post-card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, .06); }
+.post-card .post-content { white-space: pre-wrap; word-break: break-word; }
+
+.publisher-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0d6efd, #6610f2);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.like-btn {
+  border: none;
+  background: transparent;
+  color: #6c757d;
+  font-size: .95rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all .15s ease;
+}
+.like-btn:hover { background: rgba(220, 53, 69, .08); color: #dc3545; }
+.like-btn.liked { color: #dc3545; }
+
+.dept-picker {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.badge-target {
+  background: rgba(13, 110, 253, .1);
+  color: var(--cc-primary);
+  font-weight: 500;
+}
+
+@media (max-width: 576px) {
+  .nav-tabs .nav-link { font-size: .85rem; padding: .5rem .25rem; }
+  .nav-tabs .nav-link i { display: block; font-size: 1.1rem; }
+}
