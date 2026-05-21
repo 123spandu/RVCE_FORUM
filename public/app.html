@@ -211,11 +211,37 @@
            </div>
         </div>
       </div>
+      <!-- Pending Club Requests (Publishers Only) -->
+      <div class="row mt-4 d-none" id="pendingRequestsContainer">
+        <div class="col-12">
+          <div class="card shadow-sm border-0 rounded-4 border-warning">
+            <div class="card-body p-4">
+              <h5 class="fw-800 mb-4 text-warning"><i class="bi bi-person-lines-fill me-2"></i>Pending Join Requests</h5>
+              <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                  <thead class="text-muted small">
+                    <tr>
+                      <th>STUDENT</th>
+                      <th>DEPARTMENT</th>
+                      <th>CLUB</th>
+                      <th>REQUESTED ON</th>
+                      <th>ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody id="pendingRequestsTbody">
+                    <tr><td colspan="5" class="text-center text-muted">No pending requests</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ SUBSCRIPTIONS ============ -->
     <section data-pane="subs" class="d-none">
-       <div id="publisherList" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3"></div>
+       <div id="communitiesList" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3"></div>
     </section>
 
   </main>
