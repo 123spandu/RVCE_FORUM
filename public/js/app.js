@@ -186,6 +186,11 @@
   }
 
   // --- Compose Logic ---
+  function prepareCompose() {
+    composeForm.reset();
+    targetPickerWrap.classList.add('d-none');
+  }
+
   const audienceSelect = document.getElementById('audienceSelect');
   const targetPickerWrap = document.getElementById('targetPickerWrap');
   const targetLabel = document.getElementById('targetLabel');
@@ -248,6 +253,28 @@
       btn.innerHTML = 'Publish Post <i class="bi bi-arrow-right ms-2"></i>';
     }
   };
+
+  // --- Subscriptions / Communities ---
+  async function loadPublishers() {
+    try {
+      const data = await API.get('/api/users');
+      const pubs = data.users.filter(u => u.role === 'publisher' || u.role === 'admin');
+      publisherList.innerHTML = pubs.map(p => `
+        <div class="col">
+          <div class="card shadow-sm border-0 h-100 rounded-4 p-3 d-flex flex-row align-items-center gap-3">
+             <div class="publisher-avatar bg-primary text-white fs-5 d-flex align-items-center justify-content-center rounded-circle" style="width:48px; height:48px;">
+               ${initials(p.full_name)}
+             </div>
+             <div>
+               <h6 class="mb-0 fw-bold">${escapeHtml(p.full_name)}</h6>
+               <small class="text-muted">${escapeHtml(p.department_name || 'Campus Admin')}</small>
+             </div>
+             <button class="btn btn-sm btn-outline-primary rounded-pill ms-auto">Follow</button>
+          </div>
+        </div>
+      `).join('');
+    } catch (e) { console.error(e); }
+  }
 
   // --- Admin Dashboard ---
   async function loadAdminDashboard() {

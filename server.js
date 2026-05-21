@@ -15,6 +15,7 @@ const postRoutes = require('./routes/posts');
 const subscriptionRoutes = require('./routes/subscriptions');
 const adminRoutes = require('./routes/admin');
 const clubRoutes = require('./routes/clubs');
+const departmentRoutes = require('./routes/departments');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -38,6 +39,7 @@ app.use('/api/posts', postRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/clubs', clubRoutes);
+app.use('/api/departments', departmentRoutes);
 
 // SPA fallback - send the main page for any non-API path
 app.get('*', (req, res, next) => {
