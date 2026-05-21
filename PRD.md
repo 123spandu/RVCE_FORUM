@@ -26,11 +26,11 @@ The following diagrams illustrate the key operational flows of CampusConnect:
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Admin as Publisher (HOD/Club Head)
-    participant Server as Node.js (Express) Server
-    participant DB as MySQL Database
-    participant WP as WebPush Service (VAPID)
-    actor Student as Student (Subscriber)
+    actor Admin as "Publisher (HOD/Club Head)"
+    participant Server as "Node.js (Express) Server"
+    participant DB as "MySQL Database"
+    participant WP as "WebPush Service (VAPID)"
+    actor Student as "Student (Subscriber)"
 
     Student->>Server: Subscribe to Channel (CSE / IEEE Club)
     Server->>DB: Store subscription association
@@ -52,18 +52,18 @@ sequenceDiagram
 ```mermaid
 graph TD
     A[Student navigates to CampusConnect] --> B{Service Worker registered?}
-    B -- No --> C[Register Service Worker & Cache App Shell static HTML/CSS/JS]
-    B -- Yes --> D[Load App Shell from Cache]
+    B -->|No| C[Register Service Worker & Cache App Shell static HTML/CSS/JS]
+    B -->|Yes| D[Load App Shell from Cache]
     D --> E{Device Online?}
-    E -- Yes --> F[Fetch fresh posts via API]
+    E -->|Yes| F[Fetch fresh posts via API]
     F --> G[Update offline cache with top 50 posts]
     F --> H[Render dynamic feed]
-    E -- No --> I[Load top 50 cached posts from CacheStorage]
+    E -->|No| I[Load top 50 cached posts from CacheStorage]
     I --> J[Display offline status banner + cached feed]
     J --> K[Offline interactions: Bookmark / Toggle RSVP]
     K --> L[Queue action in IndexedDB / Background Sync]
     L --> M{Connectivity restored?}
-    M -- Yes --> N[Background Sync fires -> pushes queued operations to Server]
+    M -->|Yes| N[Background Sync fires -> pushes queued operations to Server]
     N --> O[Sync complete]
 ```
 
@@ -72,6 +72,78 @@ graph TD
 ## 3. Database Schema Design (MySQL)
 
 This schema is optimized for **MySQL 8** (InnoDB engine), which is currently implemented in the database booster (`db.js` and `server.js`). It expands the existing schema to accommodate all requested features while keeping the system manageable for a student.
+
+### ER Schema Diagram
+
+```mermaid
+erDiagram
+    USERS {
+        int id PK
+        string username
+        enum role "admin, publisher, viewer"
+        int department_id FK
+    }
+    DEPARTMENTS {
+        int id PK
+        string name
+        string code
+    }
+    CLUBS {
+        int id PK
+        string name
+        int club_head_id FK
+        boolean is_restricted
+    }
+    CHANNELS {
+        int id PK
+        enum type "department, club"
+        int department_id FK
+        int club_id FK
+    }
+    POSTS {
+        int id PK
+        int publisher_id FK
+        int channel_id FK
+        enum level
+        enum type
+        string title
+        timestamp scheduled_at
+    }
+    SUBSCRIPTIONS {
+        int id PK
+        int subscriber_id FK
+        int channel_id FK
+        enum status
+    }
+    CHAT_GROUPS {
+        int id PK
+        string name
+        int channel_id FK
+    }
+    CHAT_MESSAGES {
+        int id PK
+        int group_id FK
+        int sender_id FK
+        string message
+    }
+
+    DEPARTMENTS ||--o{ USERS : "groups by"
+    DEPARTMENTS ||--o| CHANNELS : "maps to"
+    CLUBS ||--o| CHANNELS : "maps to"
+    USERS ||--o{ CLUBS : "heads (Publisher)"
+    
+    CHANNELS ||--o{ SUBSCRIPTIONS : "has subscribers"
+    USERS ||--o{ SUBSCRIPTIONS : "subscribes"
+    
+    CHANNELS ||--o{ POSTS : "receives broadcast"
+    USERS ||--o{ POSTS : "authors (Publisher)"
+    
+    CHANNELS ||--o{ CHAT_GROUPS : "owns"
+    CHAT_GROUPS ||--o{ CHAT_MESSAGES : "contains"
+    USERS ||--o{ CHAT_MESSAGES : "sends"
+```
+
+### Table Definitions
 
 ```sql
 -- Create database if not exists
@@ -90,13 +162,13 @@ CREATE TABLE IF NOT EXISTS departments (
 ) ENGINE=InnoDB;
 
 -- 2. Users Table
--- Supports 5 Roles: 'super_admin', 'hod', 'club_head', 'faculty', 'student'
+-- Supports 3 Roles: 'admin' (global), 'publisher' (faculty/club leads), 'viewer' (student)
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   username VARCHAR(100) UNIQUE NOT NULL, -- e.g., student USN or admin email
   password_hash VARCHAR(255) NOT NULL,
   full_name VARCHAR(150) NOT NULL,
-  role ENUM('super_admin', 'hod', 'club_head', 'faculty', 'student') NOT NULL,
+  role ENUM('admin', 'publisher', 'viewer') NOT NULL,
   department_id INT NULL,
   phone_number VARCHAR(15) NULL,
   email VARCHAR(150) UNIQUE NOT NULL,
@@ -326,21 +398,20 @@ CREATE TABLE IF NOT EXISTS reports (
 
 ## 4. Roles & Permissions Matrix
 
-CampusConnect maintains a highly strict, role-controlled access architecture enforced at the API routing level.
+CampusConnect uses a streamlined 3-tier architecture. "Publisher" encompasses Faculty, HODs, and Student Club Leads. Publishers derive their specific permissions based on which department or club they are assigned to in the database.
 
-| Feature Area / Capability | Super Admin | HOD | Club Head | Faculty | Student |
-|:---|:---:|:---:|:---:|:---:|:---:|
-| **College-wide Broadcasts** | ✅ Yes (Create/Pin/Edit) | ❌ Read Only | ❌ Read Only | ❌ Read Only | ❌ Read Only |
-| **Department Broadcasts** | ✅ Yes | ✅ Yes (Own Dept) | ❌ Read Only | ✅ Yes (Own Dept) | ❌ Read Only |
-| **Club Broadcasts** | ✅ Yes | ❌ Read Only | ✅ Yes (Own Club) | ❌ Read Only | ❌ Read Only |
-| **Subscription Requests Approval** | ✅ Yes | ❌ No | ✅ Yes (Own Club) | ❌ No | ❌ No |
-| **User Management (Role Assign/Banning)** | ✅ Yes | ❌ No | ❌ No | ❌ No | ❌ No |
-| **Audit Logs Access** | ✅ Yes | ❌ No | ❌ No | ❌ No | ❌ No |
-| **Impersonate Admins** | ✅ Yes (Logged) | ❌ No | ❌ No | ❌ No | ❌ No |
-| **Academic Calendar (Modify)** | ✅ Yes | ❌ No | ❌ No | ❌ No | ❌ No |
-| **Placement RSVPs Analytics** | ✅ Yes | ❌ No | ❌ No | ❌ No | ❌ No (Can only RSVP) |
-| **Internal Coord. Groups (Socket.io)** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No (Unless added) |
-| **Feed Customization & Mute Prefs** | ❌ N/A | ❌ N/A | ❌ N/A | ❌ N/A | ✅ Yes (Student) |
+| Feature Area / Capability | Admin | Publisher (Faculty / Club Leads) | Viewer (Student) |
+|:---|:---:|:---:|:---:|
+| **College-wide Broadcasts** | ✅ Yes (Create/Pin/Edit) | ✅ Yes | ❌ Read Only |
+| **Department & Club Broadcasts** | ✅ Yes | ✅ Yes (Only to assigned channels) | ❌ Read Only |
+| **Subscription Requests Approval** | ✅ Yes | ✅ Yes (For their assigned restricted clubs) | ❌ No |
+| **User Management (Role Assign/Banning)** | ✅ Yes | ❌ No | ❌ No |
+| **Audit Logs Access** | ✅ Yes | ❌ No | ❌ No |
+| **Impersonate Users** | ✅ Yes (Logged) | ❌ No | ❌ No |
+| **Academic Calendar (Modify)** | ✅ Yes | ❌ No | ❌ No |
+| **Placement RSVPs Analytics** | ❌ N/A (Future Feature) | ❌ N/A (Future Feature) | ❌ N/A (Future Feature) |
+| **Internal Coord. Groups (Socket.io)** | ✅ Yes | ✅ Yes | ❌ No (Unless added) |
+| **Feed Customization & Mute Prefs** | ❌ N/A | ❌ N/A | ✅ Yes |
 
 ---
 
@@ -537,14 +608,14 @@ This 9-stage guide makes the ambitious feature set manageable for a student, all
   3. Wire client-side sockets inside `app.html` to emit `chat message` payloads and update view components instantaneously.
 - **Verification:** Log in with HOD on Chrome and Club Head on Edge. Join a coordination chat, exchange messages, and verify real-time layout updates without full page reloads.
 
-### 🟩 Milestone 7: Placements, Academic Calendar, & RSVPs
-- **Goal:** Implement placement talks, RSVPs, and calendar features.
+### 🟩 Milestone 7: Academic Calendar & Club Pages
+- **Goal:** Implement the academic calendar UI and dedicated club feeds.
 - **Action items:**
-  1. Add a separate tab dedicated to type = `placement_talk` entries.
-  2. Build the RSVP database triggers and student toggle buttons.
-  3. Create the monthly Academic Calendar view (using CSS grids or libraries like FullCalendar).
-  4. Provide linkage fields to let admins anchor calendar points to broadcast notices.
-- **Verification:** Register a student for a "Google PPO Talk" placement post. Verify their RSVP is recorded in the admin's placement roster view.
+  1. Create the monthly Academic Calendar view (using CSS grids or libraries like FullCalendar).
+  2. Provide linkage fields to let admins anchor calendar points to broadcast notices.
+  3. Build dedicated Club Pages showing club bio, logo, and a feed of their announcements.
+- **Verification:** Register a calendar event as Admin and verify it appears on the calendar grid.
+- **Note:** *Placement Drive Boards and RSVP functionalities have been deferred to a Future Feature to prioritize core Club engagement.*
 
 ### 🟩 Milestone 8: Reporting, Moderation, & Auditing
 - **Goal:** Protect platform integrity with reporting channels and audit tracking.
@@ -571,20 +642,20 @@ To allow a team of 4 to build CampusConnect concurrently without merge conflicts
 
 ```mermaid
 graph TD
-    subgraph Member 1: Data Ingestion
+    subgraph SG1 ["Member 1: Data Ingestion"]
         M1[RVCE Web Scraper & JSON Seeds]
     end
-    subgraph Member 2: Notifications
+    subgraph SG2 ["Member 2: Notifications"]
         M2[WebPush Engine & Notification Bell]
     end
-    subgraph Member 3: Internal Coordination
+    subgraph SG3 ["Member 3: Internal Coordination"]
         M3[Socket.io Chat Groups & WebSockets]
     end
-    subgraph Member 4: Core Utility Panels
-        M4[Placement RSVP Board & Calendar UI]
+    subgraph SG4 ["Member 4: Core Utility Panels"]
+        M4[Club Pages & Calendar UI]
     end
-    M1 -.-->|Provides scraped circulars & calendar| M4
-    M4 -.-->|Triggers WebPush notices| M2
+    M1 -.->|Provides scraped circulars & calendar| M4
+    M4 -.->|Triggers WebPush notices| M2
 ```
 
 ### 1. Member 1: Scraper & Official Data Ingestion (External Ingestion)
@@ -612,14 +683,13 @@ graph TD
   3. Design the coordinator chat UI pane (`public/coordination.html` or a separate tab in `app.html`).
 - **Conflict Profile:** High isolation. Touches exclusive tables (`chat_groups`, `chat_messages`) and establishes isolated Socket.io events. Does not intersect with standard student post timelines.
 
-### 4. Member 4: Placements UI Dashboard & RSVP Tracker (Feature C)
-- **Role:** Builds the dedicated placement feed section, RSVP database tables, student RSVP buttons, and coordinator analytics spreadsheets.
+### 4. Member 4: Club Pages & Academic Calendar (Feature C)
+- **Role:** Builds the dedicated Club Pages UI and interactive Academic Calendar grid. *(Note: Placements and RSVPs have been deferred to a Future Feature).*
 - **Core Action Items:**
-  1. Create a dedicated placements router (`routes/placements.js`) filtering posts of type `placement_talk` and `conference`.
-  2. Formulate the RSVP controller to insert and delete RSVPs in `placement_rsvps`.
-  3. Build an Excel/CSV exporter for placement coordinators to pull student attendee rosters.
-  4. Connect the official calendar grid component with links referencing scraped calendar updates.
-- **Conflict Profile:** Standalone UI components and dedicated router endpoints. Leverages post structures but isolates RSVP transactions in a separate table. Highly compatible with the scraped inputs from Member 1!
+  1. Create a dedicated routing pattern for viewing specific clubs (`/clubs/:id`) and fetching their filtered feeds.
+  2. Design the club profile UI (showing logo, member count, description, and post history).
+  3. Connect the official calendar grid component with links referencing scraped calendar updates.
+- **Conflict Profile:** Standalone UI components and dedicated frontend/backend views. Highly compatible with the scraped inputs from Member 1, and operates independently from the push notifications or Socket.io chat interfaces.
 
 ---
 
