@@ -4,6 +4,42 @@ const { authRequired, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Middleware to strictly enforce Super Admin role
+async function requireAdmin(req, res, next) {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Super Admin access required' });
+  }
+  next();
+}
+
+// GET /api/admin/pending-publishers
+router.get('/pending-publishers', authRequired, requireAdmin, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT u.id, u.username, u.full_name, u.email, d.name AS department_name 
+       FROM users u LEFT JOIN departments d ON u.department_id = d.id
+       WHERE u.role = 'publisher' AND u.is_active = false`
+    );
+    res.json({ pending_publishers: rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/admin/approve-publisher/:id
+router.post('/approve-publisher/:id', authRequired, requireAdmin, async (req, res) => {
+  try {
+    const [result] = await pool.query(
+      `UPDATE users SET is_active = true WHERE id = ? AND role = 'publisher'`, 
+      [req.params.id]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Pending publisher not found' });
+    res.json({ success: true, message: 'Publisher approved successfully and can now login.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // GET /api/admin/stats
 router.get('/stats', authRequired, requireRole('admin'), async (req, res) => {
   try {

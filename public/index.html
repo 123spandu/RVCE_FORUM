@@ -24,41 +24,109 @@
           <p class="text-muted small mb-0">Stay in the loop with your campus</p>
         </div>
 
-        <form id="loginForm" novalidate>
-          <div class="mb-3">
-            <label for="username" class="form-label small fw-semibold">Username</label>
-            <div class="input-group">
-              <span class="input-group-text bg-white"><i class="bi bi-person"></i></span>
-              <input type="text" class="form-control" id="username" name="username" required autocomplete="username">
-            </div>
-          </div>
+        <!-- Tabs -->
+        <ul class="nav nav-pills nav-justified mb-4" id="authTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active fw-semibold" id="tab-login" data-bs-toggle="pill" data-bs-target="#pane-login" type="button" role="tab">Sign In</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link fw-semibold" id="tab-register" data-bs-toggle="pill" data-bs-target="#pane-register" type="button" role="tab">Create Account</button>
+          </li>
+        </ul>
 
-          <div class="mb-3">
-            <label for="password" class="form-label small fw-semibold">Password</label>
-            <div class="input-group">
-              <span class="input-group-text bg-white"><i class="bi bi-lock"></i></span>
-              <input type="password" class="form-control" id="password" name="password" required autocomplete="current-password">
-              <button class="btn btn-outline-secondary" type="button" id="togglePw" tabindex="-1" aria-label="Show password">
-                <i class="bi bi-eye"></i>
+        <div class="tab-content" id="authTabContent">
+          <!-- Login Pane -->
+          <div class="tab-pane fade show active" id="pane-login" role="tabpanel">
+            <form id="loginForm" novalidate>
+              <div class="mb-3">
+                <label for="username" class="form-label small fw-semibold">Username</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-white"><i class="bi bi-person"></i></span>
+                  <input type="text" class="form-control" id="username" name="username" required autocomplete="username">
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label for="password" class="form-label small fw-semibold">Password</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-white"><i class="bi bi-lock"></i></span>
+                  <input type="password" class="form-control" id="password" name="password" required autocomplete="current-password">
+                  <button class="btn btn-outline-secondary toggle-pw" type="button" tabindex="-1">
+                    <i class="bi bi-eye"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div id="loginError" class="alert alert-danger small d-none mb-3"></div>
+
+              <button class="btn btn-primary w-100 fw-semibold" type="submit" id="loginBtn">
+                <span id="loginBtnText">Sign in</span>
+                <span class="spinner-border spinner-border-sm ms-2 d-none" id="loginBtnSpinner" role="status"></span>
               </button>
-            </div>
+            </form>
           </div>
 
-          <div id="loginError" class="alert alert-danger small d-none mb-3"></div>
+          <!-- Register Pane -->
+          <div class="tab-pane fade" id="pane-register" role="tabpanel">
+            <form id="registerForm" novalidate>
+              <div class="row g-2 mb-2">
+                <div class="col-6">
+                  <label class="form-label small fw-semibold">Full Name</label>
+                  <input type="text" class="form-control" id="reg_full_name" required>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold">Username</label>
+                  <input type="text" class="form-control" id="reg_username" required>
+                </div>
+              </div>
 
-          <button class="btn btn-primary w-100 fw-semibold" type="submit" id="loginBtn">
-            <span id="loginBtnText">Sign in</span>
-            <span class="spinner-border spinner-border-sm ms-2 d-none" id="loginBtnSpinner" role="status"></span>
-          </button>
-        </form>
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">College Email (@rvce.edu.in)</label>
+                <input type="email" class="form-control" id="reg_email" required>
+              </div>
 
-        <p class="text-center text-muted small mt-4 mb-0">
-          New accounts are issued by your administrator.
-        </p>
+              <div class="row g-2 mb-2">
+                <div class="col-6">
+                  <label class="form-label small fw-semibold">Role</label>
+                  <select class="form-select" id="reg_role" required>
+                    <option value="viewer" selected>Student</option>
+                    <option value="publisher">Publisher</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold">Department</label>
+                  <select class="form-select" id="reg_department" required>
+                    <option value="">Loading...</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label small fw-semibold">Password</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-white"><i class="bi bi-lock"></i></span>
+                  <input type="password" class="form-control" id="reg_password" required>
+                  <button class="btn btn-outline-secondary toggle-pw" type="button" tabindex="-1">
+                    <i class="bi bi-eye"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div id="regError" class="alert alert-danger small d-none mb-3"></div>
+              <div id="regSuccess" class="alert alert-success small d-none mb-3"></div>
+
+              <button class="btn btn-success w-100 fw-semibold" type="submit" id="regBtn">
+                <span id="regBtnText">Create Account</span>
+                <span class="spinner-border spinner-border-sm ms-2 d-none" id="regBtnSpinner" role="status"></span>
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/js/sw-register.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/login.js"></script>

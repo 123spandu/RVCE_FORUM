@@ -7,6 +7,75 @@ const { authRequired, JWT_SECRET } = require('../middleware/auth');
 
 const router = express.Router();
 
+// POST /api/auth/register
+router.post('/register', async (req, res) => {
+  try {
+    const { username, password, full_name, email, phone_number, department_id, role } = req.body || {};
+    
+    if (!username || !password || !full_name || !email) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Restrict to RVCE emails
+    if (!email.endsWith('@rvce.edu.in')) {
+      return res.status(400).json({ error: 'Only @rvce.edu.in emails are permitted to register.' });
+    }
+
+    // Check if user exists
+    const [existing] = await pool.query('SELECT id FROM users WHERE username = ? OR email = ?', [username, email]);
+    if (existing.length > 0) {
+      return res.status(400).json({ error: 'Username or email already taken' });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hash = await bcrypt.hash(password, salt);
+    
+    // Publishers require admin approval, Students are auto-approved
+    const finalRole = role === 'publisher' ? 'publisher' : 'viewer';
+    const isActive = finalRole === 'publisher' ? false : true;
+    const deptId = department_id ? parseInt(department_id) : null;
+
+    const [result] = await pool.query(
+      `INSERT INTO users (username, password_hash, full_name, role, department_id, phone_number, email, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [username, hash, full_name, finalRole, deptId, phone_number || null, email, isActive]
+    );
+
+    if (!isActive) {
+      return res.status(201).json({ pending: true, message: 'Account created successfully! Please wait for Admin approval to login.' });
+    }
+
+    // Auto-login for active students
+    const payload = {
+      id: result.insertId,
+      username,
+      role: finalRole,
+      department_id: deptId,
+      managed_club_ids: []
+    };
+    
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
+
+    res.status(201).json({
+      token,
+      user: {
+        id: result.insertId,
+        username,
+        full_name,
+        role: finalRole,
+        department_id: deptId,
+        department_name: null,
+        managed_club_ids: []
+      }
+    });
+
+  } catch (err) {
+    console.error('Registration error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
@@ -16,7 +85,7 @@ router.post('/login', async (req, res) => {
     }
 
     const [rows] = await pool.query(
-      `SELECT u.id, u.username, u.password_hash, u.full_name, u.role, u.department_id, d.name AS department_name
+      `SELECT u.id, u.username, u.password_hash, u.full_name, u.role, u.department_id, u.is_active, d.name AS department_name
        FROM users u LEFT JOIN departments d ON u.department_id = d.id
        WHERE u.username = ? LIMIT 1`,
       [username]
@@ -27,6 +96,11 @@ router.post('/login', async (req, res) => {
     }
 
     const user = rows[0];
+    
+    if (!user.is_active) {
+      return res.status(403).json({ error: 'Your account is currently pending Admin approval.' });
+    }
+
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
       return res.status(401).json({ error: 'Invalid username or password' });

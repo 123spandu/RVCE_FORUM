@@ -5,7 +5,7 @@ const { authRequired } = require('../middleware/auth');
 const router = express.Router();
 
 // GET /api/departments
-router.get('/', authRequired, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM departments ORDER BY name');
     res.json({ departments: rows });
