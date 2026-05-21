@@ -13,16 +13,19 @@ const userRoutes = require('./routes/users');
 const departmentRoutes = require('./routes/departments');
 const postRoutes = require('./routes/posts');
 const subscriptionRoutes = require('./routes/subscriptions');
+const adminRoutes = require('./routes/admin');
+const clubRoutes = require('./routes/clubs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '5mb' })); // Increased limit for images
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Static files (PWA frontend)
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health-check
 app.get('/api/health', (req, res) => res.json({ ok: true }));
@@ -33,6 +36,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/clubs', clubRoutes);
 
 // SPA fallback - send the main page for any non-API path
 app.get('*', (req, res, next) => {

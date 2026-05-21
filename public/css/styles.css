@@ -1,99 +1,177 @@
-/* Campus Connect – custom styles */
+/* Campus Connect – Modern Premium Styles */
 :root {
-  --cc-primary: #0d6efd;
-  --cc-radius: 14px;
+  --cc-primary: #6366f1;
+  --cc-primary-dark: #4f46e5;
+  --cc-secondary: #f43f5e;
+  --cc-bg: #f8fafc;
+  --cc-card-bg: #ffffff;
+  --cc-text-main: #1e293b;
+  --cc-text-muted: #64748b;
+  --cc-radius-lg: 16px;
+  --cc-radius-md: 12px;
+  --cc-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --cc-shadow-hover: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 }
 
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--cc-bg);
+  color: var(--cc-text-main);
+  line-height: 1.5;
 }
 
-/* ===== Login page ===== */
-.login-bg {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.login-card {
-  width: 100%;
-  max-width: 420px;
-  border-radius: var(--cc-radius);
+.fade-in { animation: fadeIn 0.3s ease forwards; }
+
+/* Navbar */
+.navbar {
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
 }
 
-.brand-circle {
+.navbar-brand {
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--cc-primary) !important;
+}
+
+/* Stories section */
+.stories-container {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 10px 0;
+  scrollbar-width: none;
+}
+.stories-container::-webkit-scrollbar { display: none; }
+
+.story-item {
+  min-width: 80px;
+  text-align: center;
+  cursor: pointer;
+}
+.story-circle {
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #0d6efd, #6610f2);
-  color: #fff;
+  padding: 3px;
+  border: 2px solid var(--cc-primary);
+  margin-bottom: 4px;
+  transition: transform 0.2s;
+}
+.story-circle:hover { transform: scale(1.05); }
+.story-circle img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.story-name { font-size: 0.75rem; color: var(--cc-text-muted); font-weight: 500; }
+
+/* Post Cards */
+.post-card {
+  background: var(--cc-card-bg);
+  border-radius: var(--cc-radius-lg);
+  border: none;
+  box-shadow: var(--cc-shadow);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+.post-card:hover { transform: translateY(-4px); box-shadow: var(--cc-shadow-hover); }
+
+.post-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.post-publisher-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--cc-primary), #a855f7);
+  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
-  box-shadow: 0 6px 18px rgba(13, 110, 253, .35);
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
-/* ===== App ===== */
-.nav-tabs .nav-link {
-  color: #495057;
-  font-weight: 500;
+.post-image {
+  width: 100%;
+  max-height: 400px;
+  object-fit: cover;
+  border-radius: var(--cc-radius-md);
+  margin: 12px 0;
+}
+
+.post-actions {
+  display: flex;
+  gap: 16px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+.post-action-btn {
+  background: none;
   border: none;
-  border-bottom: 3px solid transparent;
+  color: var(--cc-text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.2s;
+}
+.post-action-btn:hover { color: var(--cc-primary); }
+.post-action-btn.liked { color: var(--cc-secondary); }
+
+/* Tabs */
+.nav-tabs { border: none; background: white; padding: 4px; border-radius: 12px; gap: 4px; }
+.nav-tabs .nav-link {
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 10px 20px;
+  color: var(--cc-text-muted);
+  font-weight: 600;
+  transition: all 0.2s;
 }
 .nav-tabs .nav-link.active {
-  color: var(--cc-primary);
-  background: transparent;
-  border-bottom: 3px solid var(--cc-primary);
+  background: var(--cc-primary) !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
 }
 
-.post-card {
-  background: #fff;
-  border-radius: var(--cc-radius);
-  border: 1px solid rgba(0, 0, 0, .06);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
-  transition: box-shadow .15s ease;
-}
-.post-card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, .06); }
-.post-card .post-content { white-space: pre-wrap; word-break: break-word; }
+/* Modals */
+.modal-content { border-radius: 20px; border: none; box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25); }
 
-.publisher-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #0d6efd, #6610f2);
-  color: #fff;
+/* Stats cards */
+.stat-card {
+  padding: 20px;
+  border-radius: var(--cc-radius-md);
+  background: white;
+  border: 1px solid #f1f5f9;
+  text-align: center;
+}
+.stat-value { font-size: 1.5rem; font-weight: 800; color: var(--cc-primary); }
+.stat-label { font-size: 0.8rem; color: var(--cc-text-muted); font-weight: 600; text-transform: uppercase; }
+
+/* Filter Bar */
+.filter-bar {
+  background: white;
+  padding: 12px;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  box-shadow: var(--cc-shadow);
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  flex-shrink: 0;
-  font-size: 14px;
 }
 
-.like-btn {
-  border: none;
-  background: transparent;
-  color: #6c757d;
-  font-size: .95rem;
-  padding: 4px 8px;
-  border-radius: 6px;
-  transition: all .15s ease;
-}
-.like-btn:hover { background: rgba(220, 53, 69, .08); color: #dc3545; }
-.like-btn.liked { color: #dc3545; }
-
-.dept-picker {
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.badge-target {
-  background: rgba(13, 110, 253, .1);
-  color: var(--cc-primary);
-  font-weight: 500;
-}
-
-@media (max-width: 576px) {
-  .nav-tabs .nav-link { font-size: .85rem; padding: .5rem .25rem; }
-  .nav-tabs .nav-link i { display: block; font-size: 1.1rem; }
+@media (max-width: 768px) {
+  .post-card { border-radius: 0; margin-left: -12px; margin-right: -12px; }
 }
