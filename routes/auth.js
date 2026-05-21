@@ -42,6 +42,17 @@ router.post('/register', async (req, res) => {
       [username, hash, full_name, finalRole, deptId, email, isActive]
     );
 
+    // Auto-subscribe the new user to their department's official channel
+    if (deptId) {
+      const [channels] = await pool.query('SELECT id FROM channels WHERE department_id = ? AND type = "department" LIMIT 1', [deptId]);
+      if (channels.length > 0) {
+        await pool.query(
+          `INSERT INTO subscriptions (subscriber_id, channel_id, status) VALUES (?, ?, 'approved')`,
+          [result.insertId, channels[0].id]
+        );
+      }
+    }
+
     if (!isActive) {
       return res.status(201).json({ pending: true, message: 'Account created successfully! Please wait for Admin approval to login.' });
     }
