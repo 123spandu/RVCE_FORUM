@@ -23,14 +23,8 @@ router.get('/', authRequired, async (req, res) => {
     let whereClause = "p.is_published = TRUE";
     let params = [];
 
-    // Base Visibility Rules
-    if (me.role !== 'admin') {
-      whereClause += ` AND (
-        p.level = 'college_wide' OR
-        p.channel_id IN (SELECT channel_id FROM subscriptions WHERE subscriber_id = ? AND status = 'approved')
-      )`;
-      params.push(me.id);
-    }
+    // Base Visibility Rules removed per user architecture update.
+    // All posts are now globally visible. Subscriptions govern push notifications instead.
 
     // UI Team's advanced filters
     if (type) { whereClause += " AND p.type = ?"; params.push(type); }
