@@ -11,7 +11,8 @@ router.get('/', authRequired, requireRole('admin'), async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT u.id, u.username, u.full_name, u.role, u.department_id,
-              d.name AS department_name, u.created_at
+              d.name AS department_name, u.created_at,
+              NOT u.is_active AS is_banned
        FROM users u LEFT JOIN departments d ON u.department_id = d.id
        ORDER BY u.created_at DESC`
     );

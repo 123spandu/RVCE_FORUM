@@ -32,12 +32,21 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
+    // If publisher or admin, check if they manage any clubs
+    let managed_club_ids = [];
+    if (user.role === 'publisher' || user.role === 'admin') {
+      const [clubRows] = await pool.query('SELECT id FROM clubs WHERE club_head_id = ?', [user.id]);
+      managed_club_ids = clubRows.map(r => r.id);
+    }
+
     const payload = {
       id: user.id,
       username: user.username,
       role: user.role,
-      department_id: user.department_id
+      department_id: user.department_id,
+      managed_club_ids
     };
+    
     const token = jwt.sign(payload, JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d'
     });
@@ -50,7 +59,8 @@ router.post('/login', async (req, res) => {
         full_name: user.full_name,
         role: user.role,
         department_id: user.department_id,
-        department_name: user.department_name
+        department_name: user.department_name,
+        managed_club_ids
       }
     });
   } catch (err) {
@@ -69,7 +79,16 @@ router.get('/me', authRequired, async (req, res) => {
       [req.user.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
-    res.json({ user: rows[0] });
+    
+    const user = rows[0];
+    let managed_club_ids = [];
+    if (user.role === 'publisher' || user.role === 'admin') {
+      const [clubRows] = await pool.query('SELECT id FROM clubs WHERE club_head_id = ?', [user.id]);
+      managed_club_ids = clubRows.map(r => r.id);
+    }
+    
+    user.managed_club_ids = managed_club_ids;
+    res.json({ user });
   } catch (err) {
     console.error('Me error:', err);
     res.status(500).json({ error: 'Server error' });
