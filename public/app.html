@@ -3,206 +3,233 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Campus Connect</title>
+  <title>Campus Connect | Modern Campus Feed</title>
   <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#0d6efd">
+  <meta name="theme-color" content="#6366f1">
   <link rel="icon" href="/icons/icon-192.png">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <!-- Google Fonts - Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Styles -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link rel="stylesheet" href="/css/styles.css">
 </head>
-<body class="bg-light">
+<body>
 
-  <nav class="navbar navbar-dark bg-primary sticky-top shadow-sm">
-    <div class="container-fluid">
-      <span class="navbar-brand fw-bold d-flex align-items-center gap-2">
-        <i class="bi bi-mortarboard-fill"></i>
-        <span>Campus Connect</span>
-        <span id="offlineBadge" class="badge bg-warning text-dark ms-2 d-none">offline</span>
-      </span>
-      <div class="d-flex align-items-center gap-2">
-        <span class="text-white-50 small d-none d-sm-inline" id="whoAmI"></span>
-        <button class="btn btn-sm btn-outline-light" id="logoutBtn">
-          <i class="bi bi-box-arrow-right"></i> <span class="d-none d-sm-inline">Logout</span>
+  <!-- Premium Bottom Nav for Mobile / Top Nav for Desktop -->
+  <nav class="navbar navbar-light sticky-top py-2">
+    <div class="container d-flex justify-content-between align-items-center">
+      <a href="#" class="navbar-brand d-flex align-items-center gap-2">
+        <i class="bi bi-rocket-takeoff-fill fs-3"></i>
+        <span class="d-none d-sm-inline">CampusConnect</span>
+      </a>
+      
+      <div class="d-flex align-items-center gap-3">
+        <div class="position-relative d-none d-md-block">
+          <input type="text" id="globalSearch" class="form-control form-control-sm rounded-pill" placeholder="Search notices, events..." style="width: 250px; background: #f1f5f9; border: none;">
+          <i class="bi bi-search position-absolute text-muted" style="right: 12px; top: 6px;"></i>
+        </div>
+        <span class="text-muted small fw-600" id="whoAmI"></span>
+        <button class="btn btn-sm btn-light rounded-circle" id="logoutBtn" title="Logout">
+          <i class="bi bi-box-arrow-right"></i>
         </button>
       </div>
     </div>
   </nav>
 
-  <!-- Tabs -->
-  <ul class="nav nav-tabs nav-fill bg-white shadow-sm sticky-top" id="mainTabs" style="top:56px;z-index:1020;">
-    <li class="nav-item">
-      <a class="nav-link active" data-tab="feed" href="#"><i class="bi bi-house"></i> Feed</a>
-    </li>
-    <li class="nav-item d-none" id="tabCompose">
-      <a class="nav-link" data-tab="compose" href="#"><i class="bi bi-pencil-square"></i> Post</a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link" data-tab="subs" href="#"><i class="bi bi-bell"></i> Subscriptions</a>
-    </li>
-    <li class="nav-item d-none" id="tabAdmin">
-      <a class="nav-link" data-tab="admin" href="#"><i class="bi bi-gear"></i> Admin</a>
-    </li>
-  </ul>
+  <!-- Navigation System -->
+  <div class="container mt-3">
+    <ul class="nav nav-tabs shadow-sm mb-4" id="mainTabs">
+      <li class="nav-item flex-fill">
+        <a class="nav-link active text-center" data-tab="feed" href="#"><i class="bi bi-grid-1x2"></i> <span class="d-none d-md-inline ms-1">Feed</span></a>
+      </li>
+      <li class="nav-item flex-fill d-none" id="tabCompose">
+        <a class="nav-link text-center" data-tab="compose" href="#"><i class="bi bi-plus-circle"></i> <span class="d-none d-md-inline ms-1">Post</span></a>
+      </li>
+      <li class="nav-item flex-fill">
+        <a class="nav-link text-center" data-tab="subs" href="#"><i class="bi bi-people"></i> <span class="d-none d-md-inline ms-1">Communities</span></a>
+      </li>
+      <li class="nav-item flex-fill d-none" id="tabAdmin">
+        <a class="nav-link text-center" data-tab="admin" href="#"><i class="bi bi-activity"></i> <span class="d-none d-md-inline ms-1">Dashboard</span></a>
+      </li>
+    </ul>
+  </div>
 
-  <main class="container py-3" id="appMain">
-
+  <main class="container mb-5" id="appMain">
+    
     <!-- ============ FEED ============ -->
     <section data-pane="feed">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="h5 mb-0">Latest posts</h2>
-        <button class="btn btn-sm btn-outline-primary" id="refreshFeedBtn">
-          <i class="bi bi-arrow-clockwise"></i> Refresh
-        </button>
+      <!-- Stories -->
+      <div class="stories-wrapper mb-4">
+        <h6 class="fw-800 text-uppercase small text-muted mb-2 ls-1">New Updates</h6>
+        <div class="stories-container" id="storiesContainer">
+          <!-- Stories will be injected here -->
+          <div class="story-item" id="addStoryBtn">
+            <div class="story-circle d-flex align-items-center justify-content-center border-dashed" style="border: 2px dashed #cbd5e1;">
+              <i class="bi bi-plus text-muted fs-3"></i>
+            </div>
+            <span class="story-name">Add Story</span>
+          </div>
+        </div>
       </div>
-      <div id="feedStatus" class="alert alert-info small d-none"></div>
-      <div id="feedList" class="d-flex flex-column gap-3">
-        <div class="text-center text-muted py-5"><div class="spinner-border" role="status"></div></div>
+
+      <!-- Filter Bar -->
+      <div class="filter-bar mb-4 overflow-x-auto">
+        <button class="btn btn-sm btn-dark rounded-pill feed-filter active" data-type="">All</button>
+        <button class="btn btn-sm btn-outline-secondary rounded-pill feed-filter" data-type="event">Events</button>
+        <button class="btn btn-sm btn-outline-secondary rounded-pill feed-filter" data-type="hackathon">Hackathons</button>
+        <button class="btn btn-sm btn-outline-secondary rounded-pill feed-filter" data-type="placement talk">Placements</button>
+        <button class="btn btn-sm btn-outline-secondary rounded-pill feed-filter" data-type="circular">Notices</button>
+        <div class="ms-auto d-flex gap-2">
+          <select id="deptFilter" class="form-select form-select-sm rounded-pill border-0 bg-light" style="width: auto;">
+             <option value="">All Departments</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="feedList" class="row row-cols-1 row-cols-lg-2 g-4">
+        <!-- Posts will be injected here -->
       </div>
     </section>
 
-    <!-- ============ COMPOSE (publisher / admin) ============ -->
+    <!-- ============ ADVANCED COMPOSE ============ -->
     <section data-pane="compose" class="d-none">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h2 class="h5 mb-3">Create a new post</h2>
-          <form id="composeForm">
-            <div class="mb-3">
-              <label for="postTitle" class="form-label fw-semibold">Title</label>
-              <input id="postTitle" type="text" class="form-control" maxlength="200" required>
-            </div>
-            <div class="mb-3">
-              <label for="postContent" class="form-label fw-semibold">Content</label>
-              <textarea id="postContent" class="form-control" rows="5" required></textarea>
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Audience</label>
-              <div class="form-check">
-                <input class="form-check-input" type="radio" name="audience" id="audAll" value="all" checked>
-                <label class="form-check-label" for="audAll">
-                  Everyone <span class="text-muted small">(default)</span>
-                </label>
+      <div class="row justify-content-center">
+        <div class="col-lg-8">
+          <div class="card shadow-sm border-0 p-4 rounded-4">
+            <h4 class="fw-800 mb-4">Create Announcement</h4>
+            <form id="composeForm">
+              <div class="mb-4">
+                <label class="form-label fw-600">Title</label>
+                <input id="postTitle" type="text" class="form-control rounded-3 border-light bg-light" placeholder="What's happening?" required>
               </div>
-              <div class="form-check">
-                <input class="form-check-input" type="radio" name="audience" id="audDept" value="department">
-                <label class="form-check-label" for="audDept">Specific department(s)</label>
+              
+              <div class="mb-4">
+                <label class="form-label fw-600">Content</label>
+                <textarea id="postContent" class="form-control rounded-4 border-light bg-light" rows="6" placeholder="Share more details..."></textarea>
+              </div>
+
+              <div class="mb-4">
+                <label class="form-label fw-600 text-primary"><i class="bi bi-image me-2"></i>Add Media</label>
+                <input type="file" id="postImage" class="form-control border-dashed" accept="image/*">
+              </div>
+
+              <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                  <label class="form-label fw-600">Post Category</label>
+                  <select id="postType" class="form-select rounded-3 border-light bg-light" required>
+                    <option value="" disabled selected>Select type</option>
+                    <option value="event">Event</option>
+                    <option value="hackathon">Hackathon</option>
+                    <option value="meeting">Meeting</option>
+                    <option value="placement talk">Placement Talk</option>
+                    <option value="seminar">Seminar</option>
+                    <option value="workshop">Workshop</option>
+                    <option value="circular">Circular / Notice</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-600">Audience</label>
+                  <select id="audienceSelect" class="form-select rounded-3 border-light bg-light" required>
+                    <option value="all">Everyone (College Wide)</option>
+                    <option value="department">Specific Department</option>
+                    <option value="club">Specific Club</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Multi-select for Depts/Clubs - populated via JS -->
+              <div id="targetPickerWrap" class="mb-4 d-none p-3 bg-light rounded-4">
+                <label id="targetLabel" class="form-label fw-600">Selecting Target...</label>
+                <div id="targetPicker" class="d-flex flex-wrap gap-2"></div>
+              </div>
+
+              <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                  <label class="form-label fw-600">Schedule Posting (Optional)</label>
+                  <input id="scheduledAt" type="datetime-local" class="form-control rounded-3 border-light bg-light">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-600">Event Date (If applicable)</label>
+                  <input id="eventDate" type="date" class="form-control rounded-3 border-light bg-light">
+                </div>
+              </div>
+
+              <div class="d-grid">
+                <button class="btn btn-primary btn-lg rounded-pill fw-bold py-3 shadow-lg" type="submit" id="composeBtn">
+                  Publish Post <i class="bi bi-arrow-right ms-2"></i>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ADMIN DASHBOARD ============ -->
+    <section data-pane="admin" class="d-none">
+      <div class="row g-3 mb-4" id="analyticsBoard">
+         <!-- Stats will be injected here -->
+      </div>
+
+      <div class="row g-4">
+        <!-- User Management -->
+        <div class="col-lg-8">
+          <div class="card shadow-sm border-0 rounded-4">
+            <div class="card-body p-4">
+              <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="fw-800 mb-0">Member Directory</h5>
+                <button class="btn btn-sm btn-light rounded-pill" id="refreshUsersBtn"><i class="bi bi-arrow-repeat"></i></button>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                  <thead class="text-muted small">
+                    <tr>
+                      <th>IDENTITY</th>
+                      <th>ROLE</th>
+                      <th>COMMUNITY</th>
+                      <th>ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="usersTbody"></tbody>
+                </table>
               </div>
             </div>
-
-            <div class="mb-3 d-none" id="deptPickerWrap">
-              <label class="form-label fw-semibold">Choose departments</label>
-              <div id="deptPicker" class="border rounded p-2 dept-picker">
-                <div class="text-muted small">Loading…</div>
-              </div>
-            </div>
-
-            <div id="composeError" class="alert alert-danger small d-none"></div>
-            <div id="composeOk" class="alert alert-success small d-none">Posted!</div>
-
-            <button class="btn btn-primary" type="submit" id="composeBtn">
-              <i class="bi bi-send"></i> Publish
-            </button>
-          </form>
+          </div>
+        </div>
+        <!-- Quick Actions -->
+        <div class="col-lg-4">
+           <div class="card shadow-sm border-0 rounded-4 mb-4">
+             <div class="card-body p-4 text-center">
+                <i class="bi bi-hammer text-danger fs-2"></i>
+                <h6 class="fw-800 mt-2">Moderation Tools</h6>
+                <p class="text-muted small text-center">Approve pending publishers or prune stale content from the database.</p>
+             </div>
+           </div>
         </div>
       </div>
     </section>
 
     <!-- ============ SUBSCRIPTIONS ============ -->
     <section data-pane="subs" class="d-none">
-      <h2 class="h5 mb-3">Publishers</h2>
-      <p class="text-muted small">Subscribe to faculty, departments and clubs to follow their posts.</p>
-      <div id="publisherList" class="d-flex flex-column gap-2">
-        <div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm" role="status"></div></div>
-      </div>
-    </section>
-
-    <!-- ============ ADMIN ============ -->
-    <section data-pane="admin" class="d-none">
-      <div class="card shadow-sm mb-3">
-        <div class="card-body">
-          <h2 class="h5 mb-3">Add a new user</h2>
-          <form id="addUserForm" class="row g-2">
-            <div class="col-12 col-md-6">
-              <label class="form-label small fw-semibold">Username</label>
-              <input id="auUsername" type="text" class="form-control" required>
-            </div>
-            <div class="col-12 col-md-6">
-              <label class="form-label small fw-semibold">Full name</label>
-              <input id="auFullName" type="text" class="form-control" required>
-            </div>
-            <div class="col-12 col-md-4">
-              <label class="form-label small fw-semibold">Password</label>
-              <input id="auPassword" type="text" class="form-control" minlength="6" required>
-            </div>
-            <div class="col-12 col-md-4">
-              <label class="form-label small fw-semibold">Role</label>
-              <select id="auRole" class="form-select">
-                <option value="viewer">Viewer (student)</option>
-                <option value="publisher">Publisher (faculty/dept/club)</option>
-              </select>
-            </div>
-            <div class="col-12 col-md-4">
-              <label class="form-label small fw-semibold">Department</label>
-              <select id="auDept" class="form-select">
-                <option value="">— None —</option>
-              </select>
-            </div>
-            <div class="col-12">
-              <div id="auError" class="alert alert-danger small d-none"></div>
-              <div id="auOk" class="alert alert-success small d-none">User created</div>
-              <button class="btn btn-primary" type="submit"><i class="bi bi-person-plus"></i> Create user</button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <div class="card shadow-sm mb-3">
-        <div class="card-body">
-          <h2 class="h5 mb-3">Add a department</h2>
-          <form id="addDeptForm" class="row g-2">
-            <div class="col-12 col-md-8">
-              <input id="adName" type="text" class="form-control" placeholder="Department name" required>
-            </div>
-            <div class="col-12 col-md-4">
-              <button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-plus-lg"></i> Add</button>
-            </div>
-          </form>
-          <div id="adMsg" class="small mt-2"></div>
-        </div>
-      </div>
-
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <h2 class="h5 mb-0">All users</h2>
-            <button class="btn btn-sm btn-outline-secondary" id="refreshUsersBtn">
-              <i class="bi bi-arrow-clockwise"></i>
-            </button>
-          </div>
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-              <thead>
-                <tr>
-                  <th>Username</th>
-                  <th>Name</th>
-                  <th>Role</th>
-                  <th>Department</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="usersTbody">
-                <tr><td colspan="5" class="text-center text-muted py-3">Loading…</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+       <div id="publisherList" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3"></div>
     </section>
 
   </main>
 
+  <!-- Post Detail Modal -->
+  <div class="modal fade" id="postModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content overflow-hidden" id="modalPostContent">
+        <!-- Content dynamic -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/js/sw-register.js"></script>
   <script src="/js/api.js"></script>

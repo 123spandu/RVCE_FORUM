@@ -16,7 +16,7 @@ router.post('/login', async (req, res) => {
     }
 
     const [rows] = await pool.query(
-      `SELECT u.id, u.username, u.password_hash, u.full_name, u.role, u.department_id, d.name AS department_name
+      `SELECT u.id, u.username, u.password_hash, u.full_name, u.role, u.department_id, u.is_banned, u.is_approved, d.name AS department_name
        FROM users u LEFT JOIN departments d ON u.department_id = d.id
        WHERE u.username = ? LIMIT 1`,
       [username]
@@ -27,6 +27,13 @@ router.post('/login', async (req, res) => {
     }
 
     const user = rows[0];
+    if (user.is_banned) {
+      return res.status(403).json({ error: 'Your account has been banned' });
+    }
+    if (!user.is_approved) {
+      return res.status(403).json({ error: 'Your account is pending approval' });
+    }
+
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
       return res.status(401).json({ error: 'Invalid username or password' });
