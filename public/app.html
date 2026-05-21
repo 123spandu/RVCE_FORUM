@@ -52,6 +52,9 @@
       <li class="nav-item flex-fill">
         <a class="nav-link text-center" data-tab="subs" href="#"><i class="bi bi-people"></i> <span class="d-none d-md-inline ms-1">Communities</span></a>
       </li>
+      <li class="nav-item flex-fill d-none" id="tabModeration">
+        <a class="nav-link text-center" data-tab="moderation" href="#"><i class="bi bi-shield-check"></i> <span class="d-none d-md-inline ms-1">Moderation</span></a>
+      </li>
       <li class="nav-item flex-fill d-none" id="tabAdmin">
         <a class="nav-link text-center" data-tab="admin" href="#"><i class="bi bi-activity"></i> <span class="d-none d-md-inline ms-1">Dashboard</span></a>
       </li>
@@ -211,8 +214,11 @@
            </div>
         </div>
       </div>
-      <!-- Pending Club Requests (Publishers Only) -->
-      <div class="row mt-4 d-none" id="pendingRequestsContainer">
+    </section>
+
+    <!-- ============ MODERATION (Publishers Only) ============ -->
+    <section data-pane="moderation" class="d-none">
+      <div class="row mt-4" id="pendingRequestsContainer">
         <div class="col-12">
           <div class="card shadow-sm border-0 rounded-4 border-warning">
             <div class="card-body p-4">

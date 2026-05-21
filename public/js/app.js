@@ -11,6 +11,7 @@
   const panes = document.querySelectorAll('[data-pane]');
   const tabCompose = document.getElementById('tabCompose');
   const tabAdmin = document.getElementById('tabAdmin');
+  const tabModeration = document.getElementById('tabModeration');
   const offlineBadge = document.getElementById('offlineBadge');
   const globalSearch = document.getElementById('globalSearch');
 
@@ -30,6 +31,7 @@
   // --- Initialization ---
   whoAmI.textContent = user.full_name;
   if (user.role === 'publisher' || user.role === 'admin') tabCompose.classList.remove('d-none');
+  if (user.role === 'publisher' || user.role === 'admin') tabModeration.classList.remove('d-none');
   if (user.role === 'admin') tabAdmin.classList.remove('d-none');
 
   // Init Data
@@ -51,6 +53,7 @@
       
       if (target === 'feed') loadFeed();
       if (target === 'admin') loadAdminDashboard();
+      if (target === 'moderation') loadModeration();
       if (target === 'subs') loadCommunities();
       if (target === 'compose') prepareCompose();
     });
@@ -325,41 +328,43 @@
         <div class="col-12 col-md-8 col-lg-4"><div class="stat-card bg-primary text-white"><div class="stat-value text-white">${stats.mostActiveClub}</div><div class="stat-label text-white-50">Most Active Community</div></div></div>
       `;
       loadUsersDirectory();
+    } catch (e) {
+      console.error('Failed to load Admin Dashboard:', e);
+    }
+  }
 
-      // Load pending requests
-      const pendingContainer = document.getElementById('pendingRequestsContainer');
-      const pendingTbody = document.getElementById('pendingRequestsTbody');
-      try {
-        const { pending } = await API.get('/api/channels/pending');
-        if (pending && pending.length > 0) {
-          pendingContainer.classList.remove('d-none');
-          pendingTbody.innerHTML = pending.map(r => `
-            <tr>
-              <td>
-                <div class="fw-bold">${escapeHtml(r.student_name)}</div>
-                <div class="small text-muted">@${escapeHtml(r.student_username)}</div>
-              </td>
-              <td>${escapeHtml(r.student_department || 'Generic')}</td>
-              <td><span class="badge bg-indigo text-white">${escapeHtml(r.channel_name)}</span></td>
-              <td class="text-muted small">${new Date(r.created_at).toLocaleDateString()}</td>
-              <td>
-                <button class="btn btn-sm btn-success rounded-pill px-3" onclick="window.approveRequest(${r.channel_id}, ${r.subscriber_id})">Approve</button>
-              </td>
-            </tr>
-          `).join('');
-        } else {
-          pendingContainer.classList.add('d-none');
-        }
-      } catch (err) {
-        console.error(err);
+  // --- Moderation Dashboard (Publishers) ---
+  async function loadModeration() {
+    const pendingTbody = document.getElementById('pendingRequestsTbody');
+    try {
+      const { pending } = await API.get('/api/channels/pending');
+      if (pending && pending.length > 0) {
+        pendingTbody.innerHTML = pending.map(r => `
+          <tr>
+            <td>
+              <div class="fw-bold">${escapeHtml(r.student_name)}</div>
+              <div class="small text-muted">@${escapeHtml(r.student_username)}</div>
+            </td>
+            <td>${escapeHtml(r.student_department || 'Generic')}</td>
+            <td><span class="badge bg-indigo text-white">${escapeHtml(r.channel_name)}</span></td>
+            <td class="text-muted small">${new Date(r.created_at).toLocaleDateString()}</td>
+            <td>
+              <button class="btn btn-sm btn-success rounded-pill px-3" onclick="window.approveRequest(${r.channel_id}, ${r.subscriber_id})">Approve</button>
+            </td>
+          </tr>
+        `).join('');
+      } else {
+        pendingTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No pending requests right now!</td></tr>';
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Failed to load moderation requests:', err);
+    }
   }
 
   window.approveRequest = async function(channelId, subscriberId) {
     try {
       await API.post(`/api/channels/${channelId}/approve/${subscriberId}`);
-      loadAdminDashboard();
+      loadModeration();
     } catch (err) {
       alert(err.message || 'Error approving request');
     }
