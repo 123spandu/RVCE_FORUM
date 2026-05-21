@@ -145,17 +145,3 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- Seed Data (Basic Departments)
-INSERT IGNORE INTO departments (name, code) VALUES
-  ('Computer Science', 'CSE'),
-  ('Electronics', 'ECE'),
-  ('Mechanical', 'ME'),
-  ('Civil', 'CV'),
-  ('Electrical', 'EEE'),
-  ('Information Technology', 'ISE'),
-  ('Mathematics', 'MATH'),
-  ('Physics', 'PHY');
-
--- Seed associated channels for the departments
-INSERT IGNORE INTO channels (type, department_id, name)
-SELECT 'department', id, name FROM departments;
