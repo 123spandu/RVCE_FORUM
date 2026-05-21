@@ -218,7 +218,7 @@ INSERT INTO users (id, username, password_hash, full_name, role, department_id, 
 -- ============================================================================
 INSERT INTO clubs (id, name, code, description, logo_url, club_head_id, department_id, is_restricted) VALUES
 (1, 'RV Debating Society', 'DEBSOC', 'Official debating and literary society of RVCE', '/uploads/debsoc_logo.png', 3, NULL, FALSE),
-(2, 'Envisage', 'ENVISAGE', 'AR/VR and Game Development Club', '/uploads/envisage_logo.png', 4, 1, FALSE);
+(2, 'Envisage', 'ENVISAGE', 'AR/VR and Game Development Club', '/uploads/envisage_logo.png', 4, 1, TRUE);
 
 -- ============================================================================
 -- 4. Channels Data
