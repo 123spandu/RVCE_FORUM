@@ -60,6 +60,7 @@ router.post('/:id/subscribe', authRequired, async (req, res) => {
     }
   } catch (err) {
     console.error('Subscribe error:', err);
+    require('fs').appendFileSync(require('path').join(__dirname, '../scratch/error.log'), new Date().toISOString() + '\\n' + (err.stack || err) + '\\n\\n');
     res.status(500).json({ error: 'Server error' });
   }
 });
