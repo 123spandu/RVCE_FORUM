@@ -30,7 +30,7 @@ router.post('/register', async (req, res) => {
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const hash = await bcrypt.hash(password, salt);
-    
+
     // Self-registration always creates an active viewer (student).
     // Only an admin can later promote a user to publisher.
     const finalRole = 'viewer';
@@ -66,7 +66,7 @@ router.post('/register', async (req, res) => {
       department_id: deptId,
       managed_club_ids: []
     };
-    
+
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
 
     res.status(201).json({
@@ -108,7 +108,7 @@ router.post('/login', async (req, res) => {
     }
 
     const user = rows[0];
-    
+
     // Banned users are deactivated by an admin. Block login with a clear message.
     if (!user.is_active) {
       return res.status(403).json({ error: 'You are banned.' });
@@ -133,7 +133,7 @@ router.post('/login', async (req, res) => {
       department_id: user.department_id,
       managed_club_ids
     };
-    
+
     const token = jwt.sign(payload, JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d'
     });
@@ -166,14 +166,14 @@ router.get('/me', authRequired, async (req, res) => {
       [req.user.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
-    
+
     const user = rows[0];
     let managed_club_ids = [];
     if (user.role === 'publisher' || user.role === 'admin') {
       const [clubRows] = await pool.query('SELECT id FROM clubs WHERE club_head_id = ?', [user.id]);
       managed_club_ids = clubRows.map(r => r.id);
     }
-    
+
     user.managed_club_ids = managed_club_ids;
     res.json({ user });
   } catch (err) {

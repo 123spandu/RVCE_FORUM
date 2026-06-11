@@ -1,7 +1,25 @@
-# CampusConnect — The RVCE Broadcast PWA
+# RVCE Connect — The RVCE Broadcast PWA
 ## Central Product Requirement Document (PRD)
 
-> **STATUS UPDATE (June 2026):** Core backend, database schema, and authentication systems are **fully implemented**. Frontend UI development is **in progress**. Push notifications, offline sync, and advanced features are in the integration phase.
+> **STATUS UPDATE (12 June 2026):** The app is **functionally complete** for its core scope. Backend, MySQL schema, JWT auth, the role-based feed/composer, channel subscriptions with a per-community notification **bell**, **real Web Push (VAPID)**, admin **community management** (create/delete with custom logos), **auto-archiving of expired posts**, a hybrid-caching **service worker** with background sync, an installable **manifest** (26 fields), and a unified **light/dark theme** across all pages are all **implemented and running**. Real-time chat, the academic calendar, placement RSVPs, and Kannada i18n remain **future scope** (their tables/vision are retained below as the longer-term roadmap).
+>
+> The app was renamed from *CampusConnect* to **RVCE Connect**.
+
+---
+
+## 0. Implemented Product Decisions (changelog vs. original vision)
+
+These decisions were taken during build and supersede conflicting statements elsewhere in this document:
+
+- **All communities are public.** The `clubs.is_restricted` approval flow is removed; every subscription is auto-approved. The column is retained but locked to `FALSE`, and the old approval endpoint returns `410 Gone`.
+- **Subscribe + Bell model.** "Join" is replaced by **Subscribe** (adds a channel's posts to the feed). A separate **bell** toggle per community is the **push-notification opt-in** — subscribing alone never sends push. Bell-on registers a real Web Push subscription and sets `subscriptions.push_notifications_enabled = TRUE`.
+- **Admin-only post deletion.** Publishers can no longer delete posts (API returns `403`); admin deletions are written to `audit_logs`. The bookmark/"Save Post" control is removed from the UI.
+- **Publisher default tab.** Publishers land on the **Compose** tab on every (re)open; the Post tab is always visible to them.
+- **Moderation panel hidden** (frontend `display:none`) per product decision; the reports backend remains intact.
+- **Composer "From" + "Expires On".** A required *Post From Community* selector (maps to `channel_id`) and an optional *auto-remove* `expires_at` datetime were added; expired posts are filtered from feeds and **archived** to an `expired_posts` table by a 15-minute in-process job.
+- **Admin community CRUD.** Admins create a brand-new department/club **and** its channel in one step (with an optional **custom logo** upload), and can delete communities (posts are detached to college-wide, not cascade-deleted).
+- **Viewer-only self-registration.** Signup no longer asks for a role — everyone registers as an active **viewer**; only an admin can **promote** to publisher.
+- **Unified theme + dark mode.** One RVCE-green design system with a persistent light/dark toggle on every page (login, app, offline).
 
 ---
 
@@ -10,8 +28,8 @@
 ### The Core Problem
 At RV College of Engineering (RVCE), communication is fragmented. Critical updates, hackathon announcements, department circulars, placement drives, and club events are scattered across dozens of unofficial WhatsApp groups, email chains, and physical notice boards. A student in Computer Science (CSE) has no central channel to discover a seminar hosted by Electronics (ECE), a hackathon opened by the IEEE club, or a placement talk scheduled by the career cell, unless someone manually forwards a screenshot or text. This leads to information fatigue, missed opportunities, and administrative chaos.
 
-### The Solution: CampusConnect
-**CampusConnect** is a mobile-first Progressive Web App (PWA) that acts as the unified, official notice board for RVCE. 
+### The Solution: RVCE Connect
+**RVCE Connect** is a mobile-first Progressive Web App (PWA) that acts as the unified, official notice board for RVCE. 
 Unlike WhatsApp or Telegram:
 - **Role-Controlled Broadcast System:** Only authorized personnel (Super Admins, HODs, Faculty, Club Heads) can broadcast. Students have a read-only experience to eliminate clutter and maintain a high signal-to-noise ratio.
 - **Granular Feeds & Discovery:** Students subscribe to specific "channels" (departments and clubs) and can filter their feeds by categories (hackathons, placement talks, seminars, exams, etc.) rather than drowning in unsorted chat lists.
@@ -22,7 +40,7 @@ Unlike WhatsApp or Telegram:
 
 ## 2. System Architecture & Flowcharts
 
-The following diagrams illustrate the key operational flows of CampusConnect:
+The following diagrams illustrate the key operational flows of RVCE Connect:
 
 ### A. Core Broadcast & Native Push Notification Flow
 ```mermaid
@@ -53,7 +71,7 @@ sequenceDiagram
 ### B. Offline & Service Worker Sync Strategy
 ```mermaid
 graph TD
-    A[Student navigates to CampusConnect] --> B{Service Worker registered?}
+    A[Student navigates to RVCE Connect] --> B{Service Worker registered?}
     B -->|No| C[Register Service Worker & Cache App Shell static HTML/CSS/JS]
     B -->|Yes| D[Load App Shell from Cache]
     D --> E{Device Online?}
@@ -73,80 +91,60 @@ graph TD
 
 ## 3. Implementation Status
 
-### ✅ Completed Features
+### ✅ Completed & Running
 
 #### Backend & Database
-- **Database Schema** — All 19 tables fully defined and implemented (MySQL 8):
-  - Users, Departments, Clubs, Channels
-  - Posts, Subscriptions, WebPush Subscriptions
-  - Chat Groups & Messages, Bookmarks, Placement RSVPs
-  - Academic Calendar, Notifications, Audit Logs, Reports
-- **Authentication** — JWT-based login/register system with role-based access control
-- **API Routes** — 8 route modules implemented:
-  - `/api/auth` — Register, Login, User Profile
-  - `/api/users` — User management, publisher listings
-  - `/api/channels` — Channel listing, subscription management, subscriber approval
-  - `/api/posts` — Feed retrieval, post creation, delete, like, bookmark
-  - `/api/subscriptions` — User subscription management
-  - `/api/admin` — Admin dashboard stats, user banning, role assignment
-  - `/api/clubs` — Club listing and management
-  - `/api/departments` — Department listing
-- **Middleware** — Authentication and role-based authorization guards
-- **File Uploads** — Multer integration for image/attachment uploads
-- **Docker Support** — docker-compose.yml configured for local development
+- **Database schema (actual, in `db/schema.sql`)** — implemented tables (MySQL 8, InnoDB):
+  `departments`, `users`, `clubs`, `channels`, `subscriptions` (with `push_notifications_enabled`),
+  `posts` (with `expires_at`, `community_name`), `chat_groups`, `chat_group_members`, `chat_messages`,
+  `likes`, `bookmarks`, `stories`, `expired_posts` (archive), `audit_logs`, and `push_subscriptions`.
+  - Seed data uses `INSERT IGNORE` so the schema can be re-applied idempotently.
+  - Column migrations (`subscriptions.push_notifications_enabled`, `posts.community_name`, `channels.logo_url`) run idempotently in JS at boot (MySQL 8 has no `ADD COLUMN IF NOT EXISTS`).
+- **Authentication** — JWT login/register; **self-registration creates active viewers only**; admins promote to publisher.
+- **API route modules** — `/api/auth`, `/api/users`, `/api/channels`, `/api/posts`, `/api/subscriptions`,
+  `/api/admin`, `/api/clubs`, `/api/departments`, and **`/api/push`** (VAPID key + subscribe/unsubscribe).
+- **Web Push (VAPID)** — `web-push` configured from `.env`; new posts fan out to bell-enabled subscribers of the channel (dead endpoints pruned on 404/410).
+- **Expiry job** — `scripts/expire-posts.js` archives expired posts into `expired_posts`, run on boot and every 15 min via `setInterval`, wrapped in try/catch.
+- **Middleware** — JWT + role guards (`requireAdmin`, `requirePublisher`, `requireViewer`).
+- **File uploads** — Multer for post images and community logos (served from `/uploads`).
+- **Docker** — `docker-compose.yml` runs MySQL 8 (host port 3307).
 
 #### Frontend
-- **PWA Setup** — Fully configured:
-  - Service Worker for offline caching
-  - Web App Manifest with icons (192px, 512px)
-  - Installable on mobile and desktop
-- **UI Framework** — Bootstrap 5 + Bootstrap Icons + custom CSS
-- **Pages Implemented**:
-  - Login page (index.html)
-  - Main app shell (app.html) with responsive navigation
-  - Feed with filtering by post type (events, hackathons, placements, notices)
-  - Department/Channel selection
-  - Offline fallback page
-- **Frontend JS Modules**:
-  - JWT-aware API wrapper (api.js)
-  - Login controller (login.js)
-  - Main app controller (app.js)
-  - Service Worker registration (sw-register.js)
+- **PWA** — hybrid-caching service worker (Cache-First shell, Network-First posts/channels, **Background Sync** queue for offline publisher posts), `/offline.html` fallback, installable manifest with **26 fields** (icons 72–512, screenshots, shortcuts, share_target, display_override, edge_side_panel, protocol_handlers, handle_links, user_preferences dark colors).
+- **UI** — Bootstrap 5 + Bootstrap Icons + custom token-driven CSS; **unified light/dark theme** (`theme.js`) persisted in `localStorage`, with a toggle on every page.
+- **Pages** — login (`index.html`), app shell (`app.html`), offline (`offline.html`).
+- **Feed** — global read-only feed (newest-first, expired posts hidden), type filters, dept filter, debounced search, like, "From: <community>" badge, image fallbacks.
+- **Composer** — required *Post From Community* + optional *Expires On*; offline submissions queue to IndexedDB and sync on reconnect.
+- **Communities** — Subscribe / Subscribed (click to unsubscribe) + per-community **bell** with browser-permission handling and clear errors (insecure context / unsupported / denied).
+- **Admin dashboard** — stats, member directory with **search**, ban/unban, promote; **community management** (create dept/club + channel with custom logo; delete with post-detachment); read-only **archived posts** viewer.
+- **JS modules** — `api.js`, `login.js`, `app.js`, `sw-register.js` (+ IndexedDB `CCQueue`), `theme.js`.
 
 #### Security & Administration
-- **Role-Based Access Control** — 3 roles: admin, publisher, viewer
-- **Admin Dashboard** — View stats, manage users, approve publishers, ban users
-- **Audit Logging** — Track administrative actions and role changes
-- **Moderation** — Report management system infrastructure
+- **RBAC** — 3 roles: admin, publisher, viewer (admins inherit publisher/viewer abilities).
+- **Admin tools** — stats, user management, community CRUD, archived posts.
+- **Audit logging** — admin post deletions and community deletions recorded in `audit_logs`.
+- **Ban** — admin deactivates a user; login is blocked with a **"You are banned."** message.
 
-### 🔄 In Progress / Partial Implementation
+### 🔄 Partial
 
-- **Push Notifications** — WebPush tables/schema ready; integration with service worker in progress
-- **Chat System** — Database tables and routes defined; UI not yet implemented
-- **Academic Calendar** — Database tables ready; UI integration pending
-- **Analytics** — Post analytics table exists; tracking logic needs implementation
-- **Advanced Filtering** — UI components for filtering by level (college-wide, dept, club) ready; full backend integration ongoing
-- **Bookmarks & Preferences** — Backend tables exist; UI controls pending
-- **Placement RSVPs** — Database schema ready; UI forms pending
+- **Stories** — table + `GET /api/posts/stories` exist; the stories strip is commented out in the UI.
+- **Likes** — fully wired; **bookmarks** table/route remain but the UI control was intentionally removed.
+- **Moderation/reports** — backend infrastructure intact; the panel is hidden in the UI.
 
-### 📋 Planned / Not Yet Started
+### 📋 Future Scope (vision retained in later sections)
 
-- **Real-time notifications** — Push notification delivery system
-- **Background Sync** — Offline queue sync when connectivity restored
-- **Rich text editing** — WYSIWYG editor for post composition
-- **Image gallery** — Multi-image support in posts
-- **Search functionality** — Full-text search implementation (MySQL FTS index prepared)
-- **Stories feature** — Temporary content system (schema prepared)
-- **Private messaging** — User-to-user direct messaging
-- **User profiles** — Detailed user profile pages
-- **Analytics dashboard** — Post engagement metrics visualization
-- **Notification preferences** — Granular notification control UI
+- Real-time coordination **chat** (Socket.io) — tables exist, no UI/gateway yet.
+- **Academic calendar**, **placement RSVPs**, **post analytics**, **notification mute preferences**, **daily digest** — not built (no tables in the current schema).
+- **Full-text search** (FULLTEXT index exists on `posts`), **rich-text editor**, **multi-image** posts.
+- **Kannada i18n** and a formal **WCAG AA** accessibility pass.
 
 ---
 
 ## 4. Database Schema Design (MySQL)
 
-This schema is optimized for **MySQL 8** (InnoDB engine), which is currently implemented in the database booster (`db.js` and `server.js`). It expands the existing schema to accommodate all requested features while keeping the system manageable for a student.
+This schema is optimized for **MySQL 8** (InnoDB engine). It expands the existing schema to accommodate all requested features while keeping the system manageable for a student.
+
+> **⚠️ Note:** The block below is the **target/extended design**, not the exact current database. The **authoritative, implemented schema is `db/schema.sql`** (see Section 3 for the actual table list). Notable differences: the live schema uses `posts.image_url`/`community_name` (not `attachment_url`), the post `type` enum currently has no `placement_talk` value, `subscriptions` carries `push_notifications_enabled`, `channels` carries `logo_url`, and an `expired_posts` archive table exists. The `notification_preferences`, `notifications`, `placement_rsvps`, `post_analytics`, `academic_calendar`, `post_calendar_links`, and `reports` tables below are **future scope** and are not yet created.
 
 ### ER Schema Diagram
 
@@ -473,20 +471,21 @@ CREATE TABLE IF NOT EXISTS reports (
 
 ## 4. Roles & Permissions Matrix
 
-CampusConnect uses a streamlined 3-tier architecture. "Publisher" encompasses Faculty, HODs, and Student Club Leads. Publishers derive their specific permissions based on which department or club they are assigned to in the database.
+RVCE Connect uses a streamlined 3-tier architecture. "Publisher" encompasses Faculty, HODs, and Student Club Leads. Publishers derive their specific permissions based on which department or club they are assigned to in the database. (Rows marked *future* are not yet built.)
 
 | Feature Area / Capability | Admin | Publisher (Faculty / Club Leads) | Viewer (Student) |
 |:---|:---:|:---:|:---:|
-| **College-wide Broadcasts** | ✅ Yes (Create/Pin/Edit) | ✅ Yes | ❌ Read Only |
-| **Department & Club Broadcasts** | ✅ Yes | ✅ Yes (Only to assigned channels) | ❌ Read Only |
-| **Subscription Requests Approval** | ✅ Yes | ✅ Yes (For their assigned restricted clubs) | ❌ No |
-| **User Management (Role Assign/Banning)** | ✅ Yes | ❌ No | ❌ No |
-| **Audit Logs Access** | ✅ Yes | ❌ No | ❌ No |
-| **Impersonate Users** | ✅ Yes (Logged) | ❌ No | ❌ No |
-| **Academic Calendar (Modify)** | ✅ Yes | ❌ No | ❌ No |
-| **Placement RSVPs Analytics** | ❌ N/A (Future Feature) | ❌ N/A (Future Feature) | ❌ N/A (Future Feature) |
-| **Internal Coord. Groups (Socket.io)** | ✅ Yes | ✅ Yes | ❌ No (Unless added) |
-| **Feed Customization & Mute Prefs** | ❌ N/A | ❌ N/A | ✅ Yes |
+| **Create Posts** | ✅ Yes (any community / college-wide) | ✅ Yes (only to assigned community) | ❌ Read Only |
+| **Delete Posts** | ✅ Yes (logged to audit) | ❌ No (admin-only) | ❌ No |
+| **Subscribe + Bell (push opt-in)** | — (implicitly associated) | — (own communities) | ✅ Yes |
+| **Community Management (create/delete + logo)** | ✅ Yes | ❌ No | ❌ No |
+| **User Management (Promote / Ban)** | ✅ Yes | ❌ No | ❌ No |
+| **Audit Logs / Archived Posts** | ✅ Yes | ❌ No | ❌ No |
+| **Moderation / Reports** | (backend only, UI hidden) | ❌ No | ❌ No |
+| **Academic Calendar (Modify)** *(future)* | ✅ | ❌ | ❌ |
+| **Internal Coord. Groups (Socket.io)** *(future)* | ✅ | ✅ | ❌ |
+
+> All communities are **public** — there is no subscription-approval step. Subscribing adds a community's posts to the feed; the **bell** is the separate push opt-in.
 
 ---
 
@@ -549,17 +548,19 @@ CampusConnect uses a streamlined 3-tier architecture. "Publisher" encompasses Fa
 ### Backend
 - **Runtime:** Node.js 18+ with Express.js 4.x
 - **Database:** MySQL 8 (InnoDB) with connection pooling (mysql2)
-- **Authentication:** JWT (jsonwebtoken) with HttpOnly cookies
-- **File Handling:** Multer for image/attachment uploads
-- **Utilities:** bcryptjs for password hashing, cookie-parser for session management
+- **Authentication:** JWT (jsonwebtoken) via `Authorization: Bearer` / cookie
+- **Push:** `web-push` (VAPID) for native browser notifications
+- **File Handling:** Multer for image/logo uploads
+- **Utilities:** bcryptjs for password hashing, cookie-parser, dotenv
 - **Development:** Nodemon for hot-reload development
 
 ### Frontend
 - **Base Framework:** HTML5, vanilla JavaScript (no SPA framework)
 - **CSS:** Bootstrap 5.3 + custom CSS, responsive mobile-first design
 - **Icons:** Bootstrap Icons 1.11
-- **PWA:** Service Worker API, Web App Manifest, offline caching with CacheStorage
-- **State Management:** IndexedDB for offline data persistence
+- **PWA:** Service Worker (Cache-First shell / Network-First API / Background Sync), Web App Manifest, CacheStorage
+- **State Management:** IndexedDB for the offline publisher post queue
+- **Theming:** CSS custom properties with a persistent light/dark toggle (`theme.js`)
 - **Font:** Google Fonts (Inter typeface)
 
 ### Infrastructure
@@ -571,58 +572,68 @@ CampusConnect uses a streamlined 3-tier architecture. "Publisher" encompasses Fa
 
 ## 6. API Endpoint Specifications
 
-All endpoints are guarded by JWT middleware (`middleware/auth.js`) that attaches `req.user` (id, role, department_id) to the incoming request.
+All endpoints are guarded by JWT middleware (`middleware/auth.js`) that attaches `req.user` (id, role, department_id, managed_club_ids) to the incoming request. The list below reflects the **actually implemented** routes.
 
 ### Auth & User Management
 ```
-POST   /api/auth/login             - Public: Authenticates credentials, sets HttpOnly JWT cookie.
-POST   /api/auth/logout            - Authed: Clears cookies.
-GET    /api/auth/me                - Authed: Retrieves currently logged-in user profile, role, preferences.
-GET    /api/users                  - Super Admin: Lists college users with role filtering.
-POST   /api/users                  - Super Admin: Creates new users (assigns role, dept, email).
-PUT    /api/users/:id/role         - Super Admin: Modifies user roles or revokes access.
+POST   /api/auth/register          - Public: Creates an active VIEWER (@rvce.edu.in only); auto-logs in.
+POST   /api/auth/login             - Public: Authenticates credentials, returns JWT; banned users get 403 "You are banned."
+GET    /api/auth/me                - Authed: Current user profile, role, managed_club_ids.
+GET    /api/users                  - Admin: Lists all users (with is_banned flag).
+POST   /api/users                  - Admin: Creates a viewer/publisher.
+DELETE /api/users/:id              - Admin: Deletes a user (cannot delete self).
+POST   /api/admin/users/:id/ban    - Admin: Bans/unbans (toggles is_active).
+POST   /api/admin/users/:id/role   - Admin: Promotes/changes a user's role.
 ```
 
 ### Broadcast Feed
 ```
-GET    /api/posts                  - Authed: Chronological feed of subscribed channels (filters: query, type, dept).
-GET    /api/posts/explore          - Authed: Feed of posts from unsubscribed channels.
-GET    /api/posts/pinned           - Authed: Fetches active college-wide pinned notices.
-POST   /api/posts                  - Publisher/Admin: Publishes or drafts a notice.
-                                     Payload: { title, body, level, type, channel_id, scheduled_at, expires_at }
-PUT    /api/posts/:id              - Creator/Admin: Edits a post's content or changes schedule time.
-DELETE /api/posts/:id              - Creator/Admin: Unpublishes or deletes a post.
-GET    /api/posts/:id/analytics    - Creator/Admin: Analytics reports (Views, Sent, Opened).
+GET    /api/posts                  - Authed: Feed, newest-first, expired posts hidden (filters: q, type, date).
+                                     ?mine=1 → publisher's own history incl. expired (is_expired flag).
+GET    /api/posts/stories          - Authed: Active (non-expired) stories.
+POST   /api/posts                  - Publisher/Admin (multipart): Creates a post; fires Web Push to bell-on subs.
+                                     Fields: title, content, post_type, post_level, channel_id, expires_at, image
+DELETE /api/posts/:id              - Admin ONLY: Deletes a post (403 for others); logged to audit_logs.
+POST   /api/posts/:id/like         - Authed: Toggle like.
+POST   /api/posts/:id/bookmark     - Authed: Toggle bookmark (UI control removed; route retained).
 ```
 
-### Channels & Subscriptions
+### Channels, Subscriptions & Bell
 ```
-GET    /api/channels               - Authed: Lists all departments & registered clubs.
-POST   /api/channels/subscribe     - Authed: Subscribes to a channel (Payload: { channel_id }).
-DELETE /api/channels/unsubscribe   - Authed: Unsubscribes from a channel.
-GET    /api/channels/:id/subscribers - Publisher (Club Head): List of subscribers.
-PUT    /api/channels/requests/:id  - Club Head: Approves or declines restricted club requests.
-```
-
-### Placement & RSVPs
-```
-GET    /api/placements             - Authed: Retrieves job drives and talk broadcasts.
-POST   /api/placements/:id/rsvp    - Student: Toggles RSVP status.
-GET    /api/placements/:id/rsvps   - Admin: Lists students who RSVP'd.
+GET    /api/channels               - Authed: All communities + my_status + bell_enabled + logo_url.
+POST   /api/channels/:id/subscribe - Authed: Subscribe (always auto-approved).
+DELETE /api/channels/:id/subscribe - Authed: Unsubscribe.
+PATCH  /api/channels/:id/bell      - Authed: Toggle per-community push opt-in { enabled }.
+PUT    /api/channels/requests/:id  - Deprecated → 410 Gone (approval flow removed).
+POST   /api/channels/:cid/approve/:sid - Deprecated → 410 Gone.
 ```
 
-### Private Real-Time Coordination Chats
+### Web Push (VAPID)
 ```
-GET    /api/groups                 - Authed (Staff/Clubs): Lists user's coordination rooms.
-POST   /api/groups                 - Coordinator Admin: Creates new room & invites members.
-GET    /api/groups/:id/messages    - Room Member: Gets past 100 chat messages.
+GET    /api/push/vapid-public-key  - Authed: Public VAPID key for the client.
+POST   /api/push/subscribe         - Authed: Store this browser's PushSubscription.
+DELETE /api/push/subscribe         - Authed: Remove an endpoint (e.g. on logout).
 ```
+
+### Admin: Communities & Archive
+```
+POST   /api/admin/communities      - Admin (multipart): Creates a new dept/club + channel (optional logo).
+DELETE /api/admin/communities/:id  - Admin: Deletes a community; detaches its posts to college-wide.
+GET    /api/admin/communities/:id/active-post-count - Admin: Count for the delete-warning modal.
+GET    /api/admin/expired-posts    - Admin: Paginated read-only archive of expired posts.
+GET    /api/admin/stats            - Admin: Dashboard counters.
+GET    /api/clubs, /api/departments - Authed: Lookup lists.
+```
+
+> **Future scope (not implemented):** placement RSVPs, academic calendar, Socket.io coordination chat, post analytics, in-app notification center, and explore/pinned feeds.
 
 ---
 
 ## 7. Web Design & Premium Aesthetics (RVCE Custom Theme)
 
-To create a premium user experience, CampusConnect moves away from plain browser components. The design relies on the **RV College of Engineering Colors** (Royal Gold and Emerald Green), accented by glassmorphic panels and fluid CSS animations.
+To create a premium user experience, RVCE Connect moves away from plain browser components, with glassmorphic panels and fluid CSS animations.
+
+> **Implemented theme:** the shipped design uses an **RVCE emerald → teal** gradient accent (`#0f7a4d → #14b8a6`) on a token-driven system, with a **unified light/dark mode** toggled via `theme.js` and persisted in `localStorage`. The HSL/gold palette below is the original concept; the live tokens live in `public/css/styles.css` (`:root` for light, `html[data-theme="dark"]` for dark).
 
 ### Color Palette (CSS HSL variables)
 ```css
@@ -738,7 +749,7 @@ This 9-stage guide makes the ambitious feature set manageable for a student, all
 
 ## 9. Parallel Workstreams for a 4-Member Team
 
-To allow a team of 4 to build CampusConnect concurrently without merge conflicts or code blocks, the project is divided into **four independent modules**. One member is focused on external ingestion, and the other three build isolated, parallel features.
+To allow a team of 4 to build RVCE Connect concurrently without merge conflicts or code blocks, the project is divided into **four independent modules**. One member is focused on external ingestion, and the other three build isolated, parallel features.
 
 ```mermaid
 graph TD
@@ -848,12 +859,10 @@ Server runs on `http://localhost:3000`
 ### Docker Setup
 
 ```bash
-docker-compose up -d --build
+docker compose up -d db
 ```
 
-This spins up:
-- **MySQL 8** on port 3306
-- **Node.js App** on port 3000
+`docker-compose.yml` runs **MySQL 8** only, mapped to host port **3307** (set `DB_PORT=3307` in `.env`). The Node app is run on the host with `npm start` (or `npm run dev`) and connects to that container. The server auto-creates/migrates the schema and a default admin on first boot.
 
 ### Project Directory Structure
 
@@ -866,45 +875,46 @@ campus-connect/
 ├── docker-compose.yml           # Docker configuration
 │
 ├── db/
-│   └── schema.sql              # Full database schema (19 tables)
+│   └── schema.sql              # Implemented schema + idempotent seeds
 │
 ├── middleware/
 │   └── auth.js                 # JWT & role-based access control
 │
 ├── routes/                      # API route handlers
-│   ├── auth.js                 # Login, register, profile
+│   ├── auth.js                 # Register (viewer), login, profile
 │   ├── users.js                # User management
-│   ├── channels.js             # Channels & subscriptions
-│   ├── posts.js                # Posts CRUD & feed
-│   ├── subscriptions.js        # Subscription management
-│   ├── admin.js                # Admin dashboard
+│   ├── channels.js             # Channels, subscribe/unsubscribe, bell
+│   ├── posts.js                # Feed, create, admin-delete, like
+│   ├── subscriptions.js        # Legacy subscription helpers
+│   ├── admin.js                # Stats, users, community CRUD, archive
+│   ├── push.js                 # Web Push (VAPID) + fan-out helper
 │   ├── clubs.js                # Club listing
 │   └── departments.js          # Department listing
 │
 ├── scripts/
-│   └── init-db.js             # Database initialization script
+│   ├── init-db.js             # Database initialization script
+│   └── expire-posts.js        # Archive expired posts (run every 15 min)
 │
-├── uploads/                     # User uploaded files
+├── uploads/                     # Uploaded post images & community logos
 │
 └── public/                      # PWA Frontend
-    ├── index.html              # Login page
+    ├── index.html              # Login page (+ theme toggle)
     ├── app.html                # Main app shell
     ├── offline.html            # Offline fallback
-    ├── manifest.json           # PWA manifest
-    ├── service-worker.js       # Service Worker (caching, offline)
+    ├── manifest.json           # PWA manifest (26 fields)
+    ├── service-worker.js       # SW: hybrid cache, background sync, push
     │
     ├── css/
-    │   └── styles.css          # Custom styling
+    │   └── styles.css          # Token-driven theme (light + dark)
     │
-    ├── icons/
-    │   ├── icon-192.png        # PWA icon 192x192
-    │   └── icon-512.png        # PWA icon 512x512
+    ├── icons/                  # icon-72/96/128/192/256/512 + screenshots
     │
     └── js/
-        ├── api.js              # JWT-aware API wrapper
-        ├── login.js            # Login controller
+        ├── api.js              # JWT-aware API wrapper (get/post/patch/del)
+        ├── login.js            # Login/register controller
         ├── app.js              # Main app logic
-        └── sw-register.js      # Service Worker registration
+        ├── theme.js            # Light/dark theme controller (all pages)
+        └── sw-register.js      # SW registration + IndexedDB CCQueue
 ```
 
 ---
@@ -940,20 +950,22 @@ campus-connect/
 ## 10. Known Limitations & Considerations
 
 ### Current Scope
-- **No Real-time Chat Yet:** Chat infrastructure exists in DB; Socket.io integration pending
-- **No Push Notifications:** Infrastructure ready; service integration in progress
-- **Limited Analytics:** Post view tracking implemented; engagement metrics UI pending
-- **Single-Region Deployment:** Designed for single-site RVCE deployment
+- **Push needs a secure context:** Web Push (VAPID) is fully implemented, but browsers only allow it over **HTTPS** (or `localhost`). On a phone over plain `http://<LAN-IP>` the bell correctly reports the insecure context — use HTTPS (tunnel) or an installed PWA to receive push. iOS requires the PWA installed to the Home Screen (iOS 16.4+).
+- **No Real-time Chat Yet:** `chat_*` tables exist in DB; Socket.io gateway/UI pending.
+- **No Calendar / RSVP / Analytics:** these tables are not in the current schema (future scope).
+- **VAPID keys are local:** generated into `.env` for development; regenerate for any deployment.
+- **Single-Region Deployment:** designed for single-site RVCE deployment.
 
 ### Browser Compatibility
-- Modern browsers (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+)
-- PWA installation supported on Android and iOS 16+
-- Service Worker requires HTTPS in production (HTTP OK for localhost)
+- Modern browsers (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+).
+- PWA installation supported on Android and iOS 16.4+.
+- Service Worker & Web Push require HTTPS in production (HTTP OK for `localhost` only).
 
 ### Performance Considerations
-- Max file upload: 5MB (configurable)
-- Feed cached with 50 posts per page
-- MySQL indexes optimized for common queries (published, timestamp, search)
+- Max file upload: 5MB (configurable).
+- Feed returns up to 100 posts; SW caches the posts/channels responses for offline reads.
+- Expired posts are archived every 15 minutes by an in-process job.
+- MySQL indexes optimized for common queries (published/timestamp; FULLTEXT on title+body for future search).
 
 ---
 

@@ -1,12 +1,12 @@
 // service-worker.js — CampusConnect PWA: role-aware hybrid caching + background sync
-const SHELL_CACHE = 'cc-shell-v3';   // App shell (HTML, CSS, JS, icons, fonts)
+const SHELL_CACHE = 'cc-shell-v5';   // App shell (HTML, CSS, JS, icons, fonts)
 const POSTS_CACHE = 'cc-posts-v1';   // API GET responses (posts/channels)
 const OFFLINE_QUEUE = 'cc-queue-v1'; // Reserved cache name (queue itself lives in IndexedDB)
 
 const SHELL_ASSETS = [
   '/', '/index.html', '/app.html', '/offline.html',
   '/css/styles.css',
-  '/js/app.js', '/js/api.js', '/js/login.js', '/js/sw-register.js',
+  '/js/app.js', '/js/api.js', '/js/login.js', '/js/sw-register.js', '/js/theme.js',
   '/manifest.json',
   '/icons/icon-192.png', '/icons/icon-512.png',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',

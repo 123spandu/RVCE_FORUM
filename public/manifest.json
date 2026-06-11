@@ -85,6 +85,13 @@
       "description": "Create a new announcement (publishers only)",
       "url": "/app.html?tab=compose",
       "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Communities",
+      "short_name": "Communities",
+      "description": "Browse and subscribe to departments and clubs",
+      "url": "/app.html?tab=subs",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
     }
   ],
   "share_target": {
@@ -98,5 +105,19 @@
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "edge_side_panel": {
     "preferred_width": 400
+  },
+  "handle_links": "preferred",
+  "scope_extensions": [],
+  "protocol_handlers": [
+    {
+      "protocol": "web+rvce",
+      "url": "/app.html?post=%s"
+    }
+  ],
+  "user_preferences": {
+    "color_scheme_dark": {
+      "theme_color": "#0b1220",
+      "background_color": "#0b1220"
+    }
   }
 }
