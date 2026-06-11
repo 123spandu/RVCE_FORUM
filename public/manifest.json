@@ -1,15 +1,57 @@
 {
-  "name": "Campus Connect",
-  "short_name": "Campus",
-  "description": "Stay connected with your campus: posts from faculty, departments and clubs.",
-  "start_url": "/",
+  "name": "CampusConnect — RVCE",
+  "short_name": "CampusConnect",
+  "description": "The official unified notice board for RV College of Engineering. Stay updated with department circulars, hackathons, placements, and club events.",
+  "start_url": "/app.html",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#0d6efd",
-  "theme_color": "#0d6efd",
-  "categories": ["education", "social", "productivity"],
+  "orientation": "portrait-primary",
+  "theme_color": "#1a6b3a",
+  "background_color": "#f8f9fa",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "categories": ["education", "productivity", "social"],
+  "id": "campus-connect-rvce-2024",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "screenshots": [
+    {
+      "src": "/icons/screenshot-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "CampusConnect Feed on Mobile"
+    },
+    {
+      "src": "/icons/screenshot-desktop.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "CampusConnect Dashboard on Desktop"
+    }
+  ],
   "icons": [
+    {
+      "src": "/icons/icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/icons/icon-192.png",
       "sizes": "192x192",
@@ -17,10 +59,44 @@
       "purpose": "any maskable"
     },
     {
+      "src": "/icons/icon-256.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
       "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "View Feed",
+      "short_name": "Feed",
+      "description": "Open the latest campus announcements",
+      "url": "/app.html?tab=feed",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Compose Post",
+      "short_name": "Post",
+      "description": "Create a new announcement (publishers only)",
+      "url": "/app.html?tab=compose",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+    }
+  ],
+  "share_target": {
+    "action": "/app.html",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "body"
+    }
+  },
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
 }
