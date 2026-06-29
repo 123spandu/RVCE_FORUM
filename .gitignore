@@ -3,3 +3,6 @@ node_modules/
 .env.*
 !.env.example
 
+paper/
+images/
+scripts/
