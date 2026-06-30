@@ -292,6 +292,21 @@ INSERT IGNORE INTO channels (id, type, department_id, club_id, name, description
 (3, 'club', NULL, 24, 'DebSoc Discussions', 'Model UN and debate competition announcements'),
 (4, 'club', NULL, 14, 'Coding Club Updates', 'Hackathons, game jams, and competitive programming events');
 
+-- Backfill a community (channel) for every department that doesn't already have one.
+-- This ensures all seeded departments are visible in the Communities section.
+INSERT IGNORE INTO channels (type, department_id, name, description)
+SELECT 'department', d.id, CONCAT(d.name, ' Notice Board'),
+       CONCAT('Official announcements and updates for ', d.name)
+FROM departments d
+WHERE NOT EXISTS (SELECT 1 FROM channels c WHERE c.department_id = d.id);
+
+-- Backfill a community (channel) for every club that doesn't already have one.
+INSERT IGNORE INTO channels (type, club_id, name, description)
+SELECT 'club', cl.id, cl.name,
+       COALESCE(cl.description, CONCAT('Updates and announcements from ', cl.name))
+FROM clubs cl
+WHERE NOT EXISTS (SELECT 1 FROM channels c WHERE c.club_id = cl.id);
+
 -- ============================================================================
 -- 5. Subscriptions Data
 -- ============================================================================
@@ -313,7 +328,16 @@ INSERT IGNORE INTO posts (id, publisher_id, channel_id, title, body, level, type
 
 -- Club Posts
 (3, 3, 3, 'RV Asian Parliamentary Debate', 'Registrations are open for the annual RV APD tournament. Cash pool of Rs. 30,000!', 'student_body', 'event', '/uploads/apd_poster.png', TRUE, NOW(), DATE_ADD(NOW(), INTERVAL 10 DAY)),
-(4, 4, 4, 'Unity 3D Game Jam', '48 hours to build a game. Theme will be announced on the spot. Pizza and Redbull on us.', 'club', 'hackathon', '/uploads/gamejam_poster.png', FALSE, NOW(), DATE_ADD(NOW(), INTERVAL 5 DAY));
+(4, 4, 4, 'Unity 3D Game Jam', '48 hours to build a game. Theme will be announced on the spot. Pizza and Redbull on us.', 'club', 'hackathon', '/uploads/gamejam_poster.png', FALSE, NOW(), DATE_ADD(NOW(), INTERVAL 5 DAY)),
+
+-- Coding Club Posts (posters from uploads)
+(5, 4, 4, 'RV Code League', 'A beginner-friendly competitive programming event on HackerRank. No experience? No problem - just bring your curiosity! Winners get a spotlight on our social media. Venue: DTH (Offline), 4:30 PM to 6:30 PM. Scan the QR on the poster to register.', 'club', 'event', '/uploads/ig_rv_code_league.jpg', FALSE, NOW(), DATE_ADD(NOW(), INTERVAL 10 DAY)),
+(6, 4, 4, 'Hackemon 2.0 - Catch The Flag', 'Catch the flag. Hack the system. Be the Pokemon master! A CTF event exclusively for 1st years with a prize pool of Rs. 6,000. Refreshments provided. Venue: DTH. Register soon!', 'club', 'hackathon', '/uploads/ig_hackemon.jpg', FALSE, NOW(), DATE_ADD(NOW(), INTERVAL 7 DAY)),
+(7, 4, 4, 'Cybersecurity Vertical presents tryhackme', 'The Cybersecurity Vertical of Coding Club RVCE brings you tryhackme - a new challenge every week with a cumulative leaderboard. Register at tryhackme.codingclubrvce.com and test your skills.', 'club', 'workshop', '/uploads/ig_cybersec_verticals.jpg', FALSE, NOW(), DATE_ADD(NOW(), INTERVAL 14 DAY)),
+
+-- CSE Department Posts (posters from uploads)
+(8, 1, 1, '1st National Conference on Computer Vision - NCCV 2026', 'Theme: Surveillance & Beyond "The CCTV Story". Organised in association with the Center of Excellence in Computer Vision Research at RVCE. Keynote talks, tutorials, workshops, research paper presentations, hackathons and an industry expo. Dates: August 6th and 7th. Tracks include Analytics & AI, Security & Surveillance, Hardware & Projects, and Governance. An award is instituted for the Best Research Paper.', 'department', 'conference', '/uploads/ig_cv_conference.jpg', TRUE, NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY)),
+(9, 1, 1, 'IEEE WIE Innovate & Inspire Poster Contest', 'WIE, IEEE India Council in collaboration with the Delhi and Bangalore Sections presents the Innovate & Inspire Poster Contest - empowering women to shape technology for a better world. Mode: Online. Open to IEEE and non-IEEE students. Prizes include First, Second and a Best Creative Poster Award. Unleash your creativity and inspire the world!', 'department', 'event', '/uploads/ig_ieee_wie_day.jpg', FALSE, NOW(), DATE_ADD(NOW(), INTERVAL 7 DAY));
 
 -- ============================================================================
 -- 7. Likes Data
