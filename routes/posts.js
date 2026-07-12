@@ -54,7 +54,9 @@ router.get('/', authRequired, async (req, res) => {
              c.name AS publisher_department, c.type AS channel_type,
              (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS like_count,
              (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id AND l.user_id = ?) AS liked_by_me,
-             (SELECT COUNT(*) FROM bookmarks b WHERE b.post_id = p.id AND b.user_id = ?) AS bookmarked_by_me
+             (SELECT COUNT(*) FROM bookmarks b WHERE b.post_id = p.id AND b.user_id = ?) AS bookmarked_by_me,
+             (SELECT COUNT(*) FROM subscriptions s
+                WHERE s.channel_id = p.channel_id AND s.subscriber_id = ? AND s.status = 'approved') AS is_subscribed
       FROM posts p
       JOIN users u ON p.publisher_id = u.id
       LEFT JOIN channels c ON p.channel_id = c.id
@@ -63,8 +65,8 @@ router.get('/', authRequired, async (req, res) => {
       LIMIT 100
     `;
 
-    // Inject user_id twice for liked_by_me and bookmarked_by_me calculations
-    const finalParams = [me.id, me.id, ...params];
+    // Inject user_id for liked_by_me, bookmarked_by_me, and is_subscribed calculations
+    const finalParams = [me.id, me.id, me.id, ...params];
     const [rows] = await pool.query(sql, finalParams);
 
     // Cast booleans for UI compatibility
@@ -72,6 +74,7 @@ router.get('/', authRequired, async (req, res) => {
       r.liked_by_me = Number(r.liked_by_me) > 0;
       r.bookmarked_by_me = Number(r.bookmarked_by_me) > 0;
       r.is_expired = Number(r.is_expired) > 0;
+      r.is_subscribed = Number(r.is_subscribed) > 0;
     });
 
     res.json({ posts: rows });

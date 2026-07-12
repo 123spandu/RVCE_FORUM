@@ -211,6 +211,7 @@
           <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
             <span class="badge ${badgeClass} text-uppercase ls-1" style="font-size:0.6rem">${escapeHtml(p.post_type || 'POST')}</span>
             ${p.community_name ? `<span class="badge bg-light text-dark border py-1" style="font-size:0.6rem"><i class="bi bi-broadcast me-1"></i>From: ${escapeHtml(p.community_name)}</span>` : ''}
+            ${p.is_subscribed ? `<span class="badge bg-success-subtle text-success border border-success py-1" style="font-size:0.6rem"><i class="bi bi-check-circle-fill me-1"></i>Subscribed</span>` : ''}
             ${p.is_expired ? `<span class="badge bg-secondary py-1" style="font-size:0.6rem">EXPIRED</span>` : ''}
           </div>
 
