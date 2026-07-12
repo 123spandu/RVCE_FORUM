@@ -194,13 +194,15 @@ window.CCQueue = {
 
 // ---- Offline engagement queue (likes + bookmarks) ----
 window.CCEngage = {
-  async enqueue(action, postId) {
+  async enqueue(action, postId, desired = {}) {
     const token = localStorage.getItem('cc_token');
     const db = await ccOpenDB();
     const tx = db.transaction(CC_ACTIONS, 'readwrite');
     const record = {
       action, // 'like' | 'bookmark'
       postId: Number(postId),
+      liked: typeof desired.liked === 'boolean' ? desired.liked : undefined,
+      bookmarked: typeof desired.bookmarked === 'boolean' ? desired.bookmarked : undefined,
       token,
       status: 'pending',
       savedAt: Date.now()
@@ -260,10 +262,17 @@ window.CCEngage = {
       const path = item.action === 'bookmark'
         ? `/api/posts/${item.postId}/bookmark`
         : `/api/posts/${item.postId}/like`;
+      const body = item.action === 'bookmark'
+        ? (typeof item.bookmarked === 'boolean' ? { bookmarked: item.bookmarked } : {})
+        : (typeof item.liked === 'boolean' ? { liked: item.liked } : {});
       try {
         const res = await fetch(path, {
           method: 'POST',
-          headers: { Authorization: 'Bearer ' + (auth || item.token || '') }
+          headers: {
+            Authorization: 'Bearer ' + (auth || item.token || ''),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
         });
         if (res.ok) {
           await this.remove(item.id);

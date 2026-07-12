@@ -123,36 +123,6 @@ router.get('/', authRequired, async (req, res) => {
       [me.id]
     );
 
-    // Assignments — due in the future (or overdue within 3 days), visible via channel rules
-    const [assignments] = await pool.query(
-      `SELECT a.id, a.title, a.body, a.due_at, a.created_at,
-              u.full_name AS publisher_name,
-              c.name AS community_name, c.type AS channel_type
-         FROM assignments a
-         JOIN users u ON a.publisher_id = u.id
-         LEFT JOIN channels c ON a.channel_id = c.id
-        WHERE a.due_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
-          AND (
-            a.channel_id IS NULL
-            OR EXISTS (
-              SELECT 1 FROM channels ch
-              WHERE ch.id = a.channel_id AND (
-                (ch.type = 'department' AND ch.department_id IS NOT NULL AND ch.department_id = ?)
-                OR (
-                  ch.type = 'club' AND EXISTS (
-                    SELECT 1 FROM subscriptions s
-                    WHERE s.channel_id = ch.id AND s.subscriber_id = ? AND s.status = 'approved'
-                  )
-                )
-                OR ? = 'admin'
-              )
-            )
-          )
-        ORDER BY a.due_at ASC
-        LIMIT 12`,
-      [me.department_id != null ? Number(me.department_id) : null, me.id, me.role]
-    );
-
     // Bookmarks
     const [bookmarks] = await pool.query(
       `SELECT p.id, p.title, p.body AS content, p.type AS post_type, p.image_url,
@@ -183,20 +153,6 @@ router.get('/', authRequired, async (req, res) => {
         logo_url: c.logo_url,
         bell_enabled: !!c.bell_enabled,
         subscribed_at: c.subscribed_at
-      })),
-      attendance_alerts: {
-        coming_soon: true,
-        items: [],
-        message: 'Attendance alerts are coming soon.'
-      },
-      assignments: assignments.map(a => ({
-        id: a.id,
-        title: a.title,
-        body: a.body,
-        due_at: a.due_at,
-        publisher_name: a.publisher_name,
-        community_name: a.community_name,
-        is_overdue: a.due_at && new Date(a.due_at).getTime() < Date.now()
       })),
       bookmarks: bookmarks.map(r => ({
         ...mapPost(r),

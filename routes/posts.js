@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const pool = require('../db');
 const { authRequired, requirePublisher } = require('../middleware/auth');
-const { notifyChannelSubscribers } = require('./push');
+const { notifyNewPost } = require('./push');
 const { personalizedVisibility, departmentBoardFilter } = require('../lib/feedVisibility');
 
 const router = express.Router();
@@ -78,6 +78,7 @@ router.get('/', authRequired, async (req, res) => {
              c.name AS publisher_department, c.type AS channel_type,
              (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS like_count,
              (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id AND l.user_id = ?) AS liked_by_me,
+             (SELECT COUNT(*) FROM bookmarks b WHERE b.post_id = p.id) AS bookmark_count,
              (SELECT COUNT(*) FROM bookmarks b WHERE b.post_id = p.id AND b.user_id = ?) AS bookmarked_by_me,
              (SELECT COUNT(*) FROM subscriptions s
                 WHERE s.channel_id = p.channel_id AND s.subscriber_id = ? AND s.status = 'approved') AS is_subscribed,
@@ -247,13 +248,15 @@ router.post('/', authRequired, requirePublisher, upload.single('image'), async (
       );
     }
 
-    // Push only when the post is live now. Scheduled drafts notify when published by the job.
-    if (isPublished && channel_id) {
-      notifyChannelSubscribers(channel_id, {
-        title: communityName ? `New post in ${communityName}` : 'New campus announcement',
-        body: title,
-        postId: result.insertId
-      }, req.user.id);
+    // Push to every user who enabled browser notifications (not only bell-on subscribers).
+    if (isPublished) {
+      notifyNewPost({
+        title,
+        body,
+        postId: result.insertId,
+        communityName,
+        excludeUserId: req.user.id
+      }).catch((err) => console.error('Post push notify failed:', err.message));
     }
 
     res.status(201).json({ id: result.insertId, scheduled: !isPublished, is_published: isPublished });
@@ -308,35 +311,87 @@ router.get('/bookmarks', authRequired, async (req, res) => {
 });
 
 // POST /api/posts/:id/like
+// Body { liked: true|false } sets desired state (idempotent). Omit to toggle (legacy).
 router.post('/:id/like', authRequired, async (req, res) => {
   try {
-    const [existing] = await pool.query('SELECT id FROM likes WHERE user_id = ? AND post_id = ?', [req.user.id, req.params.id]);
-    let liked = false;
-    if (existing.length) {
+    const postId = Number(req.params.id);
+    const [posts] = await pool.query('SELECT id FROM posts WHERE id = ?', [postId]);
+    if (!posts.length) return res.status(404).json({ error: 'Post not found' });
+
+    const [existing] = await pool.query(
+      'SELECT id FROM likes WHERE user_id = ? AND post_id = ?',
+      [req.user.id, postId]
+    );
+
+    let liked;
+    if (typeof req.body?.liked === 'boolean') {
+      liked = req.body.liked;
+      if (liked && !existing.length) {
+        await pool.query('INSERT INTO likes (user_id, post_id) VALUES (?, ?)', [req.user.id, postId]);
+      } else if (!liked && existing.length) {
+        await pool.query('DELETE FROM likes WHERE id = ?', [existing[0].id]);
+      }
+    } else if (existing.length) {
       await pool.query('DELETE FROM likes WHERE id = ?', [existing[0].id]);
+      liked = false;
     } else {
-      await pool.query('INSERT INTO likes (user_id, post_id) VALUES (?, ?)', [req.user.id, req.params.id]);
+      await pool.query('INSERT INTO likes (user_id, post_id) VALUES (?, ?)', [req.user.id, postId]);
       liked = true;
     }
-    const [countResult] = await pool.query('SELECT COUNT(*) AS count FROM likes WHERE post_id = ?', [req.params.id]);
-    res.json({ liked, like_count: countResult[0].count });
+
+    const [countResult] = await pool.query('SELECT COUNT(*) AS count FROM likes WHERE post_id = ?', [postId]);
+    res.json({ liked, like_count: Number(countResult[0].count) || 0 });
   } catch (err) {
+    console.error('Like error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
 // POST /api/posts/:id/bookmark
+// Body { bookmarked: true|false } sets desired state (idempotent). Omit to toggle (legacy).
 router.post('/:id/bookmark', authRequired, async (req, res) => {
   try {
-    const [existing] = await pool.query('SELECT id FROM bookmarks WHERE user_id = ? AND post_id = ?', [req.user.id, req.params.id]);
-    if (existing.length) {
+    const postId = Number(req.params.id);
+    const [posts] = await pool.query('SELECT id FROM posts WHERE id = ?', [postId]);
+    if (!posts.length) return res.status(404).json({ error: 'Post not found' });
+
+    const [existing] = await pool.query(
+      'SELECT id FROM bookmarks WHERE user_id = ? AND post_id = ?',
+      [req.user.id, postId]
+    );
+
+    let bookmarked;
+    if (typeof req.body?.bookmarked === 'boolean') {
+      bookmarked = req.body.bookmarked;
+      if (bookmarked && !existing.length) {
+        await pool.query(
+          'INSERT INTO bookmarks (user_id, post_id) VALUES (?, ?)',
+          [req.user.id, postId]
+        );
+      } else if (!bookmarked && existing.length) {
+        await pool.query('DELETE FROM bookmarks WHERE id = ?', [existing[0].id]);
+      }
+    } else if (existing.length) {
       await pool.query('DELETE FROM bookmarks WHERE id = ?', [existing[0].id]);
-      res.json({ bookmarked: false });
+      bookmarked = false;
     } else {
-      await pool.query('INSERT INTO bookmarks (user_id, post_id) VALUES (?, ?)', [req.user.id, req.params.id]);
-      res.json({ bookmarked: true });
+      await pool.query(
+        'INSERT INTO bookmarks (user_id, post_id) VALUES (?, ?)',
+        [req.user.id, postId]
+      );
+      bookmarked = true;
     }
+
+    const [countResult] = await pool.query(
+      'SELECT COUNT(*) AS count FROM bookmarks WHERE post_id = ?',
+      [postId]
+    );
+    res.json({
+      bookmarked,
+      bookmark_count: Number(countResult[0].count) || 0
+    });
   } catch (err) {
+    console.error('Bookmark error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

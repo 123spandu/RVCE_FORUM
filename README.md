@@ -9,7 +9,8 @@
 | **Stack** | HTML · CSS · Bootstrap 5 · vanilla JavaScript · Node.js (Express) · MySQL 8 |
 | **Status** | Implemented and running (July 2026) |
 
-> No SPA framework (no React / Vue / Angular). Full report: **[PROJECT_REPORT.md](./PROJECT_REPORT.md)** · Roadmap: **[PRD.md](./PRD.md)** · Deploy: **[DEPLOY.md](./DEPLOY.md)**
+> No SPA framework (no React / Vue / Angular).  
+> **Full report:** [PROJECT_REPORT.md](./PROJECT_REPORT.md) · [View on GitHub](https://github.com/123spandu/RVCE_FORUM/blob/main/PROJECT_REPORT.md) · Roadmap: [PRD.md](./PRD.md) · Deploy: [DEPLOY.md](./DEPLOY.md)
 
 ---
 
@@ -20,7 +21,9 @@
 | **Open the app** | **[https://teens-prominent-watch-valve.trycloudflare.com](https://teens-prominent-watch-valve.trycloudflare.com)** |
 | Health check | [https://teens-prominent-watch-valve.trycloudflare.com/api/health](https://teens-prominent-watch-valve.trycloudflare.com/api/health) |
 | Local | http://localhost:3000 |
-| GitHub | [123spandu/RVCE_FORUM](https://github.com/123spandu/RVCE_FORUM) |
+| **GitHub repo** | [123spandu/RVCE_FORUM](https://github.com/123spandu/RVCE_FORUM) |
+| **College Forum App Report (Markdown)** | [View on GitHub](https://github.com/123spandu/RVCE_FORUM/blob/main/PROJECT_REPORT.md) |
+| **College Forum App Report (Word)** | [Download / view on GitHub](https://github.com/123spandu/RVCE_FORUM/blob/main/College_Forum_App_Report.docx) |
 
 > Public URL is a **Cloudflare tunnel** to the host PC. It stays live while the server + tunnel run. For permanent hosting, see [DEPLOY.md](./DEPLOY.md).
 
@@ -33,6 +36,17 @@
 | **Viewer (student)** | Viewer Sign In | `bharath_student` | `rvce123` |
 
 Change default passwords before any real / production use.
+
+---
+
+## Project report
+
+Complete college forum documentation (problem, objectives, features, architecture, workflows):
+
+- **In this repo:** [PROJECT_REPORT.md](./PROJECT_REPORT.md) · [College_Forum_App_Report.docx](./College_Forum_App_Report.docx)
+- **On GitHub:** [PROJECT_REPORT.md](https://github.com/123spandu/RVCE_FORUM/blob/main/PROJECT_REPORT.md) · [College_Forum_App_Report.docx](https://github.com/123spandu/RVCE_FORUM/blob/main/College_Forum_App_Report.docx)
+
+Also: [PRD.md](./PRD.md) · [DEPLOY.md](./DEPLOY.md)
 
 ---
 

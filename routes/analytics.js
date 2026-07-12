@@ -177,36 +177,46 @@ router.get('/publisher', authRequired, requirePublisher, async (req, res) => {
            WHERE ${scope.postWhere} AND v.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
            GROUP BY DAYOFWEEK(v.created_at), HOUR(v.created_at)
           UNION ALL
+          SELECT DAYOFWEEK(b.created_at), HOUR(b.created_at), COUNT(*)
+            FROM bookmarks b JOIN posts p ON p.id = b.post_id
+           WHERE ${scope.postWhere} AND b.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+           GROUP BY DAYOFWEEK(b.created_at), HOUR(b.created_at)
+          UNION ALL
           SELECT DAYOFWEEK(c.created_at), HOUR(c.created_at), COUNT(*)
             FROM post_clicks c JOIN posts p ON p.id = c.post_id
            WHERE ${scope.postWhere} AND c.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
            GROUP BY DAYOFWEEK(c.created_at), HOUR(c.created_at)
         ) t
         GROUP BY dow, hr`,
-      [...scope.postParams, ...scope.postParams, ...scope.postParams]
+      [...scope.postParams, ...scope.postParams, ...scope.postParams, ...scope.postParams]
     );
 
     // Engagement over last 14 days (for line/bar chart)
     const [daily] = await pool.query(
-      `SELECT d AS day, SUM(views) AS views, SUM(likes) AS likes, SUM(clicks) AS clicks FROM (
-          SELECT DATE(v.created_at) AS d, COUNT(*) AS views, 0 AS likes, 0 AS clicks
+      `SELECT d AS day, SUM(views) AS views, SUM(likes) AS likes, SUM(bookmarks) AS bookmarks, SUM(clicks) AS clicks FROM (
+          SELECT DATE(v.created_at) AS d, COUNT(*) AS views, 0 AS likes, 0 AS bookmarks, 0 AS clicks
             FROM post_views v JOIN posts p ON p.id = v.post_id
            WHERE ${scope.postWhere} AND v.created_at >= DATE_SUB(CURDATE(), INTERVAL 13 DAY)
            GROUP BY DATE(v.created_at)
           UNION ALL
-          SELECT DATE(l.created_at), 0, COUNT(*), 0
+          SELECT DATE(l.created_at), 0, COUNT(*), 0, 0
             FROM likes l JOIN posts p ON p.id = l.post_id
            WHERE ${scope.postWhere} AND l.created_at >= DATE_SUB(CURDATE(), INTERVAL 13 DAY)
            GROUP BY DATE(l.created_at)
           UNION ALL
-          SELECT DATE(c.created_at), 0, 0, COUNT(*)
+          SELECT DATE(b.created_at), 0, 0, COUNT(*), 0
+            FROM bookmarks b JOIN posts p ON p.id = b.post_id
+           WHERE ${scope.postWhere} AND b.created_at >= DATE_SUB(CURDATE(), INTERVAL 13 DAY)
+           GROUP BY DATE(b.created_at)
+          UNION ALL
+          SELECT DATE(c.created_at), 0, 0, 0, COUNT(*)
             FROM post_clicks c JOIN posts p ON p.id = c.post_id
            WHERE ${scope.postWhere} AND c.created_at >= DATE_SUB(CURDATE(), INTERVAL 13 DAY)
            GROUP BY DATE(c.created_at)
         ) x
         GROUP BY d
         ORDER BY d`,
-      [...scope.postParams, ...scope.postParams, ...scope.postParams]
+      [...scope.postParams, ...scope.postParams, ...scope.postParams, ...scope.postParams]
     );
 
     // Top posts by engagement
@@ -265,6 +275,7 @@ router.get('/publisher', authRequired, requirePublisher, async (req, res) => {
         day: r.day,
         views: Number(r.views),
         likes: Number(r.likes),
+        bookmarks: Number(r.bookmarks),
         clicks: Number(r.clicks)
       })),
       top_posts: topPosts.map(p => ({

@@ -22,6 +22,25 @@
 
 <body>
 
+  <!-- Push notification opt-in (campus-wide alerts on new posts) -->
+  <div id="pushEnableBanner" class="pwa-install-banner d-none" role="dialog" aria-label="Enable notifications">
+    <div class="container py-2 d-flex flex-wrap align-items-center gap-2 justify-content-between">
+      <div class="d-flex align-items-center gap-2 min-w-0">
+        <i class="bi bi-bell-fill text-warning flex-shrink-0" style="font-size:1.4rem"></i>
+        <div class="min-w-0">
+          <div class="fw-800 small mb-0">Get notified on new posts</div>
+          <div class="text-muted" style="font-size:0.75rem">Allow notifications so you never miss campus notices</div>
+        </div>
+      </div>
+      <div class="d-flex gap-2 flex-shrink-0">
+        <button type="button" class="btn btn-sm btn-light rounded-pill" id="pushEnableDismiss">Not now</button>
+        <button type="button" class="btn btn-sm btn-primary rounded-pill" id="pushEnableBtn">
+          <i class="bi bi-bell me-1"></i>Enable
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- PWA Install Prompt -->
   <div id="pwaInstallBanner" class="pwa-install-banner d-none" role="dialog" aria-label="Install app">
     <div class="container py-2 d-flex flex-wrap align-items-center gap-2 justify-content-between">
@@ -162,23 +181,6 @@
               <a href="#" class="small fw-600 dash-link" data-tab-jump="subs">Manage</a>
             </div>
             <div id="dashClubs" class="dash-panel-body"></div>
-          </div>
-        </div>
-        <div class="col-12 col-lg-6">
-          <div class="dash-panel h-100 dash-panel-muted">
-            <div class="dash-panel-head">
-              <h3 class="dash-panel-title"><i class="bi bi-clipboard-check me-2"></i>Attendance Alerts</h3>
-              <span class="badge bg-secondary-subtle text-secondary border">Soon</span>
-            </div>
-            <div id="dashAttendance" class="dash-panel-body"></div>
-          </div>
-        </div>
-        <div class="col-12 col-lg-6">
-          <div class="dash-panel h-100">
-            <div class="dash-panel-head">
-              <h3 class="dash-panel-title"><i class="bi bi-journal-text me-2"></i>Assignments</h3>
-            </div>
-            <div id="dashAssignments" class="dash-panel-body"></div>
           </div>
         </div>
         <div class="col-12">
@@ -573,7 +575,7 @@
         <h4 class="fw-800 mb-1">Communities</h4>
         <p class="text-muted small mb-0">
           Subscribe to departments and clubs to follow their updates in your feed.
-          Use the bell after subscribing to also get push notifications.
+          Enable browser notifications (banner or bell) to get alerts whenever a new post is published.
         </p>
       </div>
       <div id="communitiesList" class="row row-cols-1 row-cols-lg-2 g-3"></div>

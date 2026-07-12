@@ -207,8 +207,6 @@
       deadlines: document.getElementById('dashDeadlines'),
       events: document.getElementById('dashEvents'),
       clubs: document.getElementById('dashClubs'),
-      attendance: document.getElementById('dashAttendance'),
-      assignments: document.getElementById('dashAssignments'),
       bookmarks: document.getElementById('dashBookmarks')
     };
     Object.values(els).forEach(el => { if (el) el.innerHTML = '<div class="text-muted small">Loading…</div>'; });
@@ -268,32 +266,6 @@
                 ${c.bell_enabled ? '<i class="bi bi-bell-fill text-success" title="Alerts on"></i>' : '<i class="bi bi-bell-slash text-muted" title="Alerts off"></i>'}
               </div>`).join('')
           : dashEmpty('Subscribe to clubs under Communities to see them here.');
-      }
-
-      if (els.attendance) {
-        const att = data.attendance_alerts || {};
-        els.attendance.innerHTML = `
-          <div class="dash-coming-soon">
-            <i class="bi bi-clock-history me-2"></i>
-            ${escapeHtml(att.message || 'Attendance alerts are coming soon.')}
-          </div>`;
-      }
-
-      if (els.assignments) {
-        els.assignments.innerHTML = data.assignments?.length
-          ? data.assignments.map(a => `
-              <div class="dash-item">
-                <div class="d-flex justify-content-between gap-2 align-items-start">
-                  <div class="dash-item-title">${escapeHtml(a.title)}</div>
-                  ${a.is_overdue ? '<span class="badge bg-danger">Overdue</span>' : ''}
-                </div>
-                <div class="dash-item-meta">
-                  ${a.community_name ? escapeHtml(a.community_name) + ' · ' : ''}
-                  Due ${new Date(a.due_at).toLocaleString()}
-                </div>
-                ${a.body ? `<div class="small text-muted mt-1">${escapeHtml(a.body)}</div>` : ''}
-              </div>`).join('')
-          : dashEmpty('No assignments due soon.');
       }
 
       if (els.bookmarks) {
@@ -462,10 +434,17 @@
                   fill: true,
                   tension: 0.35
                 },
-                {
+                  {
                   label: 'Likes',
                   data: days.map(d => (byDay.get(d) || {}).likes || 0),
                   borderColor: '#f43f5e',
+                  backgroundColor: 'transparent',
+                  tension: 0.35
+                },
+                {
+                  label: 'Bookmarks',
+                  data: days.map(d => (byDay.get(d) || {}).bookmarks || 0),
+                  borderColor: '#f59e0b',
                   backgroundColor: 'transparent',
                   tension: 0.35
                 },
@@ -772,7 +751,7 @@
             </button>
             <button class="post-action-btn bookmark-btn ${p.bookmarked_by_me ? 'bookmarked' : ''}" data-id="${p.id}" title="Bookmark">
               <i class="bi ${p.bookmarked_by_me ? 'bi-bookmark-fill' : 'bi-bookmark'}"></i>
-              <span>${p.bookmarked_by_me ? 'Saved' : 'Save'}</span>
+              <span>${Number(p.bookmark_count) || 0} saves</span>
             </button>
             <button class="post-action-btn share-btn" onclick="sharePost(${p.id})">
               <i class="bi bi-share"></i> <span>Share</span>
@@ -1479,7 +1458,7 @@
     const messages = {
       insecure: 'Push notifications need a secure (HTTPS) connection. On a phone, open the app over HTTPS or install it to your home screen — plain http:// over your network won’t work.',
       unsupported: 'This browser doesn’t support push notifications. On iPhone, install the app to your Home Screen first (iOS 16.4+).',
-      denied: 'Notifications are blocked for this site. Allow them in your browser/site settings, then try the bell again.',
+      denied: 'Notifications are blocked for this site. Allow them in your browser/site settings, then try Enable again.',
       'server-disabled': 'Push is not configured on the server (missing VAPID keys).'
     };
     const text = messages[reason] || ('Could not enable notifications: ' + reason);
@@ -1493,6 +1472,52 @@
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 9000);
   }
+
+  // Campus-wide push: register endpoint when permission already granted;
+  // otherwise show a one-time banner so students/publishers can opt in.
+  (async function initCampusPush() {
+    const banner = document.getElementById('pushEnableBanner');
+    const enableBtn = document.getElementById('pushEnableBtn');
+    const dismissBtn = document.getElementById('pushEnableDismiss');
+    const dismissedKey = 'cc_push_banner_dismissed';
+
+    if (!window.isSecureContext || !('Notification' in window) || !('PushManager' in window)) {
+      return;
+    }
+
+    try {
+      if (Notification.permission === 'granted') {
+        await ensurePushSubscription();
+        return;
+      }
+    } catch (e) {
+      console.warn('Push re-register failed:', e.message || e);
+    }
+
+    if (Notification.permission !== 'default') return;
+    if (localStorage.getItem(dismissedKey) === '1') return;
+    if (!banner) return;
+
+    banner.classList.remove('d-none');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', () => {
+        banner.classList.add('d-none');
+        localStorage.setItem(dismissedKey, '1');
+      });
+    }
+    if (enableBtn) {
+      enableBtn.addEventListener('click', async () => {
+        try {
+          await ensurePushSubscription();
+          banner.classList.add('d-none');
+          localStorage.removeItem(dismissedKey);
+          showToast('Notifications enabled — you will get alerts on new posts.');
+        } catch (e) {
+          showPushHelp(e.message);
+        }
+      });
+    }
+  })();
 
   // --- Admin Dashboard ---
   async function loadAdminDashboard() {
@@ -1853,20 +1878,20 @@
   window.toggleLike = async (btn) => {
     const id = btn.dataset.id;
     const wasLiked = btn.classList.contains('liked');
+    const want = !wasLiked;
     const countEl = btn.querySelector('span');
     const prevCount = parseInt((countEl.textContent || '0'), 10) || 0;
 
     // Optimistic UI
-    btn.classList.toggle('liked', !wasLiked);
-    btn.querySelector('i').className = `bi ${!wasLiked ? 'bi-heart-fill' : 'bi-heart'}`;
-    countEl.textContent = `${Math.max(0, prevCount + (wasLiked ? -1 : 1))} likes`;
+    btn.classList.toggle('liked', want);
+    btn.querySelector('i').className = `bi ${want ? 'bi-heart-fill' : 'bi-heart'}`;
+    countEl.textContent = `${Math.max(0, prevCount + (want ? 1 : -1))} likes`;
 
     if (!navigator.onLine && window.CCEngage) {
       try {
-        await window.CCEngage.enqueue('like', id);
+        await window.CCEngage.enqueue('like', id, { liked: want });
         showToast('Like saved offline — will sync when you are back online.');
       } catch (_) {
-        // revert
         btn.classList.toggle('liked', wasLiked);
         btn.querySelector('i').className = `bi ${wasLiked ? 'bi-heart-fill' : 'bi-heart'}`;
         countEl.textContent = `${prevCount} likes`;
@@ -1875,13 +1900,13 @@
     }
 
     try {
-      const r = await API.post(`/api/posts/${id}/like`);
+      const r = await API.post(`/api/posts/${id}/like`, { liked: want });
       btn.classList.toggle('liked', r.liked);
       btn.querySelector('i').className = `bi ${r.liked ? 'bi-heart-fill' : 'bi-heart'}`;
-      btn.querySelector('span').textContent = `${r.like_count} likes`;
+      countEl.textContent = `${r.like_count} likes`;
     } catch (err) {
       if (err.network && window.CCEngage) {
-        await window.CCEngage.enqueue('like', id);
+        await window.CCEngage.enqueue('like', id, { liked: want });
         showToast('Like queued offline.');
         return;
       }
@@ -1894,36 +1919,47 @@
   window.toggleBookmark = async (btn) => {
     const id = btn.dataset.id;
     const wasSaved = btn.classList.contains('bookmarked');
-    btn.classList.toggle('bookmarked', !wasSaved);
-    btn.querySelector('i').className = `bi ${!wasSaved ? 'bi-bookmark-fill' : 'bi-bookmark'}`;
-    btn.querySelector('span').textContent = !wasSaved ? 'Saved' : 'Save';
+    const want = !wasSaved;
+    const countEl = btn.querySelector('span');
+    const prevCount = parseInt((countEl.textContent || '0'), 10) || 0;
+
+    btn.classList.toggle('bookmarked', want);
+    btn.querySelector('i').className = `bi ${want ? 'bi-bookmark-fill' : 'bi-bookmark'}`;
+    if (countEl) countEl.textContent = `${Math.max(0, prevCount + (want ? 1 : -1))} saves`;
 
     if (!navigator.onLine && window.CCEngage) {
       try {
-        await window.CCEngage.enqueue('bookmark', id);
+        await window.CCEngage.enqueue('bookmark', id, { bookmarked: want });
         showToast('Bookmark saved offline — will sync when online.');
       } catch (_) {
         btn.classList.toggle('bookmarked', wasSaved);
         btn.querySelector('i').className = `bi ${wasSaved ? 'bi-bookmark-fill' : 'bi-bookmark'}`;
-        btn.querySelector('span').textContent = wasSaved ? 'Saved' : 'Save';
+        if (countEl) countEl.textContent = `${prevCount} saves`;
       }
       return;
     }
 
     try {
-      const r = await API.post(`/api/posts/${id}/bookmark`);
+      const r = await API.post(`/api/posts/${id}/bookmark`, { bookmarked: want });
       btn.classList.toggle('bookmarked', r.bookmarked);
       btn.querySelector('i').className = `bi ${r.bookmarked ? 'bi-bookmark-fill' : 'bi-bookmark'}`;
-      btn.querySelector('span').textContent = r.bookmarked ? 'Saved' : 'Save';
+      if (countEl) countEl.textContent = `${Number(r.bookmark_count) || 0} saves`;
+
+      // Keep publisher analytics in sync when the Analytics tab is open
+      const analyticsPane = document.querySelector('[data-pane="analytics"]');
+      if (analyticsPane && !analyticsPane.classList.contains('d-none')
+          && (user.role === 'publisher' || user.role === 'admin')) {
+        loadPublisherAnalytics();
+      }
     } catch (err) {
       if (err.network && window.CCEngage) {
-        await window.CCEngage.enqueue('bookmark', id);
+        await window.CCEngage.enqueue('bookmark', id, { bookmarked: want });
         showToast('Bookmark queued offline.');
         return;
       }
       btn.classList.toggle('bookmarked', wasSaved);
       btn.querySelector('i').className = `bi ${wasSaved ? 'bi-bookmark-fill' : 'bi-bookmark'}`;
-      btn.querySelector('span').textContent = wasSaved ? 'Saved' : 'Save';
+      if (countEl) countEl.textContent = `${prevCount} saves`;
       alert(err.message || 'Could not update bookmark');
     }
   };

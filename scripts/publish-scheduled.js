@@ -2,7 +2,7 @@
 // Publishes posts whose scheduled_at has arrived (is_published = FALSE → TRUE)
 // and fans out push notifications once they go live.
 const pool = require('../db');
-const { notifyChannelSubscribers } = require('../routes/push');
+const { notifyNewPost } = require('../routes/push');
 
 async function publishScheduledPosts() {
   const [due] = await pool.query(
@@ -26,14 +26,12 @@ async function publishScheduledPosts() {
       if (!result.affectedRows) continue;
       count++;
 
-      if (p.channel_id) {
-        // Fire-and-forget push now that the post is live
-        notifyChannelSubscribers(p.channel_id, {
-          title: p.channel_name ? `New post in ${p.channel_name}` : 'New campus announcement',
-          body: p.title,
-          postId: p.id
-        }, p.publisher_id).catch(() => {});
-      }
+      notifyNewPost({
+        title: p.title,
+        postId: p.id,
+        communityName: p.channel_name || p.community_name,
+        excludeUserId: p.publisher_id
+      }).catch(() => {});
     } catch (err) {
       console.error(`Failed to publish scheduled post ${p.id}:`, err.message);
     }
