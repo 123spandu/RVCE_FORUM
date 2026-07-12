@@ -140,6 +140,43 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- 8b. Assignments (Personalized Dashboard)
+CREATE TABLE IF NOT EXISTS assignments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  publisher_id INT NOT NULL,
+  channel_id INT NULL,
+  title VARCHAR(200) NOT NULL,
+  body TEXT NULL,
+  due_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (publisher_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE SET NULL,
+  INDEX idx_due (due_at)
+) ENGINE=InnoDB;
+
+-- 8c. Post Views / Clicks (Publisher Analytics)
+CREATE TABLE IF NOT EXISTS post_views (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  post_id INT NOT NULL,
+  user_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_view_post_time (post_id, created_at),
+  INDEX idx_view_time (created_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS post_clicks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  post_id INT NOT NULL,
+  user_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_click_post_time (post_id, created_at),
+  INDEX idx_click_time (created_at)
+) ENGINE=InnoDB;
+
 -- 9. Stories Table
 CREATE TABLE IF NOT EXISTS stories (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -224,19 +261,20 @@ INSERT IGNORE INTO departments (id, name, code) VALUES
 -- Roles used: 'publisher' (HODs, Club Heads) and 'viewer' (Students)
 -- strictly NO admins or principals included.
 -- ============================================================================
+-- Demo password for all seeded publishers/viewers: rvce123
 INSERT IGNORE INTO users (id, username, password_hash, full_name, role, department_id, phone_number, email) VALUES
 -- HODs (Publishers)
-(1, 'hod_cse', '$2a$10$NCMYgCUAz/VvBoUlSq3ZBeyIanMcTllHlKAtweW0RVaWd3xTJjXby', 'Dr. Shobha G', 'publisher', 1, '9876500001', 'hod.cse@rvce.edu.in'),
-(2, 'hod_me', '$2a$10$NCMYgCUAz/VvBoUlSq3ZBeyIanMcTllHlKAtweW0RVaWd3xTJjXby', 'Dr. Krishna M', 'publisher', 3, '9876500002', 'hod.me@rvce.edu.in'),
+(1, 'hod_cse', '$2a$10$7BN3QuDw5k3OyZFZQm3u2ObSOkOLiP2YF4zkTajwHxl.UTqG5/efu', 'Dr. Shobha G', 'publisher', 1, '9876500001', 'hod.cse@rvce.edu.in'),
+(2, 'hod_me', '$2a$10$7BN3QuDw5k3OyZFZQm3u2ObSOkOLiP2YF4zkTajwHxl.UTqG5/efu', 'Dr. Krishna M', 'publisher', 3, '9876500002', 'hod.me@rvce.edu.in'),
 
 -- Club Heads (Publishers)
-(3, 'kavya_debsoc', '$2a$10$NCMYgCUAz/VvBoUlSq3ZBeyIanMcTllHlKAtweW0RVaWd3xTJjXby', 'Kavya Rao', 'publisher', 2, '9876500003', 'kavyar.is22@rvce.edu.in'),
-(4, 'pranav_envisage', '$2a$10$NCMYgCUAz/VvBoUlSq3ZBeyIanMcTllHlKAtweW0RVaWd3xTJjXby', 'Pranav K', 'publisher', 4, '9876500004', 'pranavk.ec21@rvce.edu.in'),
+(3, 'kavya_debsoc', '$2a$10$7BN3QuDw5k3OyZFZQm3u2ObSOkOLiP2YF4zkTajwHxl.UTqG5/efu', 'Kavya Rao', 'publisher', 2, '9876500003', 'kavyar.is22@rvce.edu.in'),
+(4, 'pranav_envisage', '$2a$10$7BN3QuDw5k3OyZFZQm3u2ObSOkOLiP2YF4zkTajwHxl.UTqG5/efu', 'Pranav K', 'publisher', 4, '9876500004', 'pranavk.ec21@rvce.edu.in'),
 
 -- Students (Viewers)
-(5, 'bharath_student', '$2a$10$NCMYgCUAz/VvBoUlSq3ZBeyIanMcTllHlKAtweW0RVaWd3xTJjXby', 'Bharath Gowda', 'viewer', 1, '9876500005', 'bharathg.cs23@rvce.edu.in'),
-(6, 'shruti_student', '$2a$10$NCMYgCUAz/VvBoUlSq3ZBeyIanMcTllHlKAtweW0RVaWd3xTJjXby', 'Shruti Iyer', 'viewer', 4, '9876500006', 'shrutii.ec23@rvce.edu.in'),
-(7, 'amith_student', '$2a$10$NCMYgCUAz/VvBoUlSq3ZBeyIanMcTllHlKAtweW0RVaWd3xTJjXby', 'Amith N', 'viewer', 3, '9876500007', 'amithn.me22@rvce.edu.in');
+(5, 'bharath_student', '$2a$10$7BN3QuDw5k3OyZFZQm3u2ObSOkOLiP2YF4zkTajwHxl.UTqG5/efu', 'Bharath Gowda', 'viewer', 1, '9876500005', 'bharathg.cs23@rvce.edu.in'),
+(6, 'shruti_student', '$2a$10$7BN3QuDw5k3OyZFZQm3u2ObSOkOLiP2YF4zkTajwHxl.UTqG5/efu', 'Shruti Iyer', 'viewer', 4, '9876500006', 'shrutii.ec23@rvce.edu.in'),
+(7, 'amith_student', '$2a$10$7BN3QuDw5k3OyZFZQm3u2ObSOkOLiP2YF4zkTajwHxl.UTqG5/efu', 'Amith N', 'viewer', 3, '9876500007', 'amithn.me22@rvce.edu.in');
 
 -- ============================================================================
 -- 3. Clubs Data

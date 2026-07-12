@@ -7,19 +7,41 @@ const { authRequired, JWT_SECRET } = require('../middleware/auth');
 
 const router = express.Router();
 
+/** Ensure a student is subscribed to their department notice board. */
+async function ensureDepartmentSubscription(userId, departmentId) {
+  if (!userId || !departmentId) return;
+  const [chans] = await pool.query(
+    `SELECT id FROM channels WHERE type = 'department' AND department_id = ? LIMIT 1`,
+    [departmentId]
+  );
+  if (!chans.length) return;
+  await pool.query(
+    `INSERT IGNORE INTO subscriptions (subscriber_id, channel_id, status)
+     VALUES (?, ?, 'approved')`,
+    [userId, chans[0].id]
+  );
+}
+
 // POST /api/auth/register
+// Self-registration for viewer, publisher, or admin (role must match the portal).
 router.post('/register', async (req, res) => {
   try {
-    const { username, password, full_name, email, department_id } = req.body || {};
+    const { username, password, full_name, email, department_id, role } = req.body || {};
 
     if (!username || !password || !full_name || !email) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+    if (String(password).length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
     }
 
     // Restrict to RVCE emails
     if (!email.endsWith('@rvce.edu.in')) {
       return res.status(400).json({ error: 'Only @rvce.edu.in emails are permitted to register.' });
     }
+
+    const allowedRoles = ['viewer', 'publisher', 'admin'];
+    const finalRole = allowedRoles.includes(role) ? role : 'viewer';
 
     // Check if user exists
     const [existing] = await pool.query('SELECT id FROM users WHERE username = ? OR email = ?', [username, email]);
@@ -31,11 +53,11 @@ router.post('/register', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hash = await bcrypt.hash(password, salt);
 
-    // Self-registration always creates an active viewer (student).
-    // Only an admin can later promote a user to publisher.
-    const finalRole = 'viewer';
     const isActive = true;
-    const deptId = department_id ? parseInt(department_id) : null;
+    const deptId = department_id ? parseInt(department_id, 10) : null;
+    if (department_id && (!Number.isInteger(deptId) || deptId <= 0)) {
+      return res.status(400).json({ error: 'Invalid department.' });
+    }
 
     const [result] = await pool.query(
       `INSERT INTO users (username, password_hash, full_name, role, department_id, email, is_active)
@@ -45,7 +67,10 @@ router.post('/register', async (req, res) => {
 
     // Auto-subscribe the new user to their department's official channel
     if (deptId) {
-      const [channels] = await pool.query('SELECT id FROM channels WHERE department_id = ? AND type = "department" LIMIT 1', [deptId]);
+      const [channels] = await pool.query(
+        'SELECT id FROM channels WHERE department_id = ? AND type = "department" LIMIT 1',
+        [deptId]
+      );
       if (channels.length > 0) {
         await pool.query(
           `INSERT INTO subscriptions (subscriber_id, channel_id, status) VALUES (?, ?, 'approved')`,
@@ -54,11 +79,6 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    if (!isActive) {
-      return res.status(201).json({ pending: true, message: 'Account created successfully! Please wait for Admin approval to login.' });
-    }
-
-    // Auto-login for active students
     const payload = {
       id: result.insertId,
       username,
@@ -81,7 +101,6 @@ router.post('/register', async (req, res) => {
         managed_club_ids: []
       }
     });
-
   } catch (err) {
     console.error('Registration error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -89,11 +108,17 @@ router.post('/register', async (req, res) => {
 });
 
 // POST /api/auth/login
+// Optional body.role enforces RBAC portal login (admin | publisher | viewer).
 router.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body || {};
+    const { username, password, role: expectedRole } = req.body || {};
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    const allowedRoles = ['admin', 'publisher', 'viewer'];
+    if (expectedRole && !allowedRoles.includes(expectedRole)) {
+      return res.status(400).json({ error: 'Invalid role portal' });
     }
 
     const [rows] = await pool.query(
@@ -119,11 +144,32 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
+    // Strict role match when signing in from a role-specific portal
+    if (expectedRole && user.role !== expectedRole) {
+      const portals = {
+        admin: 'Admin',
+        publisher: 'Publisher',
+        viewer: 'Viewer (Student)'
+      };
+      return res.status(403).json({
+        error: `This account is a ${portals[user.role] || user.role}. Please use the ${portals[user.role] || user.role} login page.`
+      });
+    }
+
     // If publisher or admin, check if they manage any clubs
     let managed_club_ids = [];
     if (user.role === 'publisher' || user.role === 'admin') {
       const [clubRows] = await pool.query('SELECT id FROM clubs WHERE club_head_id = ?', [user.id]);
       managed_club_ids = clubRows.map(r => r.id);
+    }
+
+    // Students always get their department board in the feed / dashboard
+    if (user.role === 'viewer' && user.department_id) {
+      try {
+        await ensureDepartmentSubscription(user.id, user.department_id);
+      } catch (subErr) {
+        console.error('Dept auto-subscribe failed:', subErr.message);
+      }
     }
 
     const payload = {

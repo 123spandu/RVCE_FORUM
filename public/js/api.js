@@ -36,7 +36,10 @@ const API = (() => {
 
     if (res.status === 401) {
       clearToken();
-      if (location.pathname !== '/' && location.pathname !== '/index.html') {
+      const path = location.pathname;
+      const onAuthPage = path === '/' || path === '/index.html'
+        || path.startsWith('/login-');
+      if (!onAuthPage) {
         location.href = '/';
       }
     }

@@ -5,6 +5,7 @@ const path = require('path');
 const pool = require('../db');
 const { authRequired, requirePublisher } = require('../middleware/auth');
 const { notifyChannelSubscribers } = require('./push');
+const { personalizedVisibility, departmentBoardFilter } = require('../lib/feedVisibility');
 
 const router = express.Router();
 
@@ -22,37 +23,41 @@ const upload = multer({ storage });
 router.get('/', authRequired, async (req, res) => {
   try {
     const me = req.user;
-    const { type, q, date, mine } = req.query; // UI team's query params
+    const { type, q, date, mine, dept, channel } = req.query; // UI team's query params
     const mineView = mine === '1' || mine === 'true';
+    const deptId = dept ? Number(dept) : NaN;
+    const channelId = channel ? Number(channel) : NaN;
+    const browsingDept = Number.isInteger(deptId) && deptId > 0;
+    const browsingChannel = Number.isInteger(channelId) && channelId > 0;
 
-    let whereClause = "p.is_published = TRUE";
+    let whereClause = "1=1";
     let params = [];
 
-    // Base Visibility Rules removed per user architecture update.
-    // All posts are now globally visible. Subscriptions govern push notifications instead.
-
     if (mineView) {
-      // Publishers see their full posting history, including expired posts.
+      // Publishers see their full posting history, including scheduled drafts and expired posts.
       whereClause += " AND p.publisher_id = ?";
       params.push(me.id);
     } else {
-      // Public feed: filter out posts whose expiry date has passed.
+      // Live feed: published, not future-scheduled, not expired.
+      whereClause += " AND p.is_published = TRUE AND (p.scheduled_at IS NULL OR p.scheduled_at <= NOW())";
       whereClause += " AND (p.expires_at IS NULL OR p.expires_at > NOW())";
 
-      // Audience targeting: a post is visible when it targets NO community
-      // (broadcast to all), OR the viewer is an approved SUBSCRIBER of one of the
-      // targeted communities, OR the viewer authored it. Admins bypass targeting.
-      if (me.role !== 'admin') {
-        whereClause += ` AND (
-          NOT EXISTS (SELECT 1 FROM post_target_channels ptc WHERE ptc.post_id = p.id)
-          OR EXISTS (
-            SELECT 1 FROM post_target_channels ptc
-            JOIN subscriptions s ON s.channel_id = ptc.channel_id
-            WHERE ptc.post_id = p.id AND s.subscriber_id = ? AND s.status = 'approved'
-          )
-          OR p.publisher_id = ?
-        )`;
-        params.push(me.id, me.id);
+      // Department / community browse: show that board's posts without requiring a prior subscription.
+      // Personalized feed (subscriptions + audience) applies only to the default "All" feed.
+      if (browsingDept || browsingChannel) {
+        if (browsingChannel) {
+          whereClause += ' AND p.channel_id = ?';
+          params.push(channelId);
+        }
+        if (browsingDept) {
+          const board = departmentBoardFilter(deptId);
+          whereClause += ` AND ${board.clause}`;
+          params.push(...board.params);
+        }
+      } else {
+        const vis = personalizedVisibility(me);
+        whereClause += ` AND ${vis.clause}`;
+        params.push(...vis.params);
       }
     }
 
@@ -65,6 +70,9 @@ router.get('/', authRequired, async (req, res) => {
       SELECT p.id, p.title, p.body AS content, p.level AS target_type, p.type AS post_type, p.image_url, p.is_pinned, p.created_at,
              p.expires_at,
              (p.expires_at IS NOT NULL AND p.expires_at <= NOW()) AS is_expired,
+             (p.is_published = FALSE OR (p.scheduled_at IS NOT NULL AND p.scheduled_at > NOW())) AS is_scheduled,
+             p.scheduled_at,
+             p.is_published,
              u.full_name AS publisher_name,
              COALESCE(c.name, p.community_name) AS community_name,
              c.name AS publisher_department, c.type AS channel_type,
@@ -72,7 +80,12 @@ router.get('/', authRequired, async (req, res) => {
              (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id AND l.user_id = ?) AS liked_by_me,
              (SELECT COUNT(*) FROM bookmarks b WHERE b.post_id = p.id AND b.user_id = ?) AS bookmarked_by_me,
              (SELECT COUNT(*) FROM subscriptions s
-                WHERE s.channel_id = p.channel_id AND s.subscriber_id = ? AND s.status = 'approved') AS is_subscribed
+                WHERE s.channel_id = p.channel_id AND s.subscriber_id = ? AND s.status = 'approved') AS is_subscribed,
+             (SELECT GROUP_CONCAT(ch.name ORDER BY ch.name SEPARATOR ', ')
+                FROM post_target_channels ptc
+                JOIN channels ch ON ch.id = ptc.channel_id
+                WHERE ptc.post_id = p.id) AS audience_names,
+             (SELECT COUNT(*) FROM post_target_channels ptc WHERE ptc.post_id = p.id) AS audience_count
       FROM posts p
       JOIN users u ON p.publisher_id = u.id
       LEFT JOIN channels c ON p.channel_id = c.id
@@ -90,7 +103,11 @@ router.get('/', authRequired, async (req, res) => {
       r.liked_by_me = Number(r.liked_by_me) > 0;
       r.bookmarked_by_me = Number(r.bookmarked_by_me) > 0;
       r.is_expired = Number(r.is_expired) > 0;
+      r.is_scheduled = Number(r.is_scheduled) > 0;
+      r.is_published = r.is_published === undefined ? true : Number(r.is_published) > 0;
       r.is_subscribed = Number(r.is_subscribed) > 0;
+      r.audience_count = Number(r.audience_count) || 0;
+      r.audience_names = r.audience_names || null;
     });
 
     res.json({ posts: rows });
@@ -103,7 +120,7 @@ router.get('/', authRequired, async (req, res) => {
 // POST /api/posts
 router.post('/', authRequired, requirePublisher, upload.single('image'), async (req, res) => {
   try {
-    const { title, content, target_type, post_type, post_level, department_ids, club_ids, expires_at, visibility, target_channel_ids } = req.body || {};
+    const { title, content, target_type, post_type, post_level, department_ids, club_ids, expires_at, scheduled_at, visibility, target_channel_ids } = req.body || {};
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
     // Map UI variables to backend schema variables
@@ -134,40 +151,42 @@ router.post('/', authRequired, requirePublisher, upload.single('image'), async (
       }
     }
 
-    // Publishers must always post to a community they are assigned to.
+    // Publishers may post from any public community (all communities are open).
     let communityName = null;
     if (req.user.role === 'publisher') {
       if (!channel_id) {
         return res.status(400).json({ error: 'Please select a community to post from.' });
       }
-      const [chanRows] = await pool.query('SELECT name, department_id, club_id FROM channels WHERE id = ?', [channel_id]);
+      const [chanRows] = await pool.query('SELECT name FROM channels WHERE id = ?', [channel_id]);
       if (chanRows.length === 0) return res.status(404).json({ error: 'Channel not found' });
-
-      const chan = chanRows[0];
-      const managedClubIds = req.user.managed_club_ids || [];
-      const isDeptMatch = chan.department_id !== null && chan.department_id === req.user.department_id;
-      const isClubMatch = chan.club_id !== null && managedClubIds.includes(chan.club_id);
-
-      // Owns it OR has joined (subscribed to) it.
-      let allowed = isDeptMatch || isClubMatch;
-      if (!allowed) {
-        const [sub] = await pool.query(
-          'SELECT id FROM subscriptions WHERE subscriber_id = ? AND channel_id = ?',
-          [req.user.id, channel_id]
-        );
-        allowed = sub.length > 0;
-      }
-      if (!allowed) {
-        return res.status(403).json({ error: 'You can only post to communities you own or have joined.' });
-      }
-      communityName = chan.name;
+      communityName = chanRows[0].name;
     } else if (channel_id) {
       // Admin posting into a specific community — capture its name for denormalization.
       const [chanRows] = await pool.query('SELECT name FROM channels WHERE id = ?', [channel_id]);
       if (chanRows.length) communityName = chanRows[0].name;
     }
 
-    // Validate optional expiry date — must be a valid timestamp in the future.
+    // Optional scheduled publish time.
+    // Current / past / within ~1 minute → publish now.
+    // Future → keep as draft until the publish job runs.
+    let scheduledAt = null;
+    let isPublished = true;
+    if (scheduled_at) {
+      const d = new Date(scheduled_at);
+      if (isNaN(d.getTime())) {
+        return res.status(400).json({ error: 'Invalid scheduled publish time.' });
+      }
+      scheduledAt = d;
+      if (d.getTime() > Date.now() + 60 * 1000) {
+        isPublished = false;
+      } else {
+        // Snap "now" selections to the actual publish moment
+        scheduledAt = new Date();
+      }
+    }
+
+    // Notice Expiry Automation: every notice MUST expire and move to archive.
+    // If the publisher omits expires_at, default to 7 days from publish/schedule time.
     let expiresAt = null;
     if (expires_at) {
       const d = new Date(expires_at);
@@ -178,30 +197,49 @@ router.post('/', authRequired, requirePublisher, upload.single('image'), async (
         return res.status(400).json({ error: 'Expiry date must be in the future.' });
       }
       expiresAt = d;
+    } else {
+      const base = scheduledAt && scheduledAt.getTime() > Date.now() ? scheduledAt.getTime() : Date.now();
+      expiresAt = new Date(base + 7 * 24 * 60 * 60 * 1000);
     }
 
-    // Resolve audience targeting. `visibility === 'communities'` restricts the post
-    // to the chosen community (channel) IDs — subscribers of those channels only;
-    // anything else (default) makes it visible to all. target_channel_ids may arrive
-    // as a JSON string (multipart form) or an array (offline JSON replay). Invalid/
-    // empty selections fall back to "visible to all".
+    if (scheduledAt && expiresAt.getTime() <= scheduledAt.getTime()) {
+      return res.status(400).json({ error: 'Expiry must be after the scheduled publish time.' });
+    }
+
+    // Resolve audience targeting (2.2 Department-Specific Notice Distribution):
+    // - visibility 'all' (or omitted) → college-wide (no target rows)
+    // - visibility 'communities' → must include ≥1 channel IDs (departments and/or clubs)
+    // target_channel_ids may arrive as JSON string (multipart) or array (offline replay).
     let targetChannelIds = [];
-    if (visibility === 'communities' && target_channel_ids != null) {
+    if (visibility === 'communities') {
       try {
-        const raw = Array.isArray(target_channel_ids) ? target_channel_ids : JSON.parse(target_channel_ids);
+        const raw = Array.isArray(target_channel_ids) ? target_channel_ids : JSON.parse(target_channel_ids || '[]');
         targetChannelIds = [...new Set((raw || []).map(Number).filter(n => Number.isInteger(n) && n > 0))];
       } catch (_) {
         targetChannelIds = [];
       }
+      if (targetChannelIds.length === 0) {
+        return res.status(400).json({
+          error: 'Select at least one department (or community), or choose Everyone.'
+        });
+      }
+      // Ensure every target channel exists
+      const [valid] = await pool.query(
+        `SELECT id FROM channels WHERE id IN (?)`,
+        [targetChannelIds]
+      );
+      if (valid.length !== targetChannelIds.length) {
+        return res.status(400).json({ error: 'One or more selected departments/communities are invalid.' });
+      }
     }
 
     const [result] = await pool.query(
-      `INSERT INTO posts (publisher_id, channel_id, title, body, level, type, image_url, community_name, is_pinned, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.id, channel_id, title, body, level, type, imageUrl, communityName, false, expiresAt]
+      `INSERT INTO posts (publisher_id, channel_id, title, body, level, type, image_url, community_name, is_pinned, scheduled_at, is_published, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.id, channel_id, title, body, level, type, imageUrl, communityName, false, scheduledAt, isPublished, expiresAt]
     );
 
-    // Persist community targeting (if any). No rows = visible to everyone.
+    // Persist targeting. No rows = visible to everyone in the institution.
     if (targetChannelIds.length > 0) {
       await pool.query(
         'INSERT INTO post_target_channels (post_id, channel_id) VALUES ?',
@@ -209,8 +247,8 @@ router.post('/', authRequired, requirePublisher, upload.single('image'), async (
       );
     }
 
-    // Fire push notifications to bell-enabled subscribers (non-blocking).
-    if (channel_id) {
+    // Push only when the post is live now. Scheduled drafts notify when published by the job.
+    if (isPublished && channel_id) {
       notifyChannelSubscribers(channel_id, {
         title: communityName ? `New post in ${communityName}` : 'New campus announcement',
         body: title,
@@ -218,7 +256,7 @@ router.post('/', authRequired, requirePublisher, upload.single('image'), async (
       }, req.user.id);
     }
 
-    res.status(201).json({ id: result.insertId });
+    res.status(201).json({ id: result.insertId, scheduled: !isPublished, is_published: isPublished });
   } catch (err) {
     console.error('Create post error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -237,6 +275,34 @@ router.get('/stories', authRequired, async (req, res) => {
     `);
     res.json({ stories: rows });
   } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/posts/bookmarks — saved notices for the signed-in user
+router.get('/bookmarks', authRequired, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT p.id, p.title, p.body AS content, p.level AS target_type, p.type AS post_type,
+              p.image_url, p.created_at, p.expires_at,
+              u.full_name AS publisher_name,
+              COALESCE(c.name, p.community_name) AS community_name,
+              b.created_at AS bookmarked_at
+         FROM bookmarks b
+         JOIN posts p ON p.id = b.post_id
+         JOIN users u ON p.publisher_id = u.id
+         LEFT JOIN channels c ON p.channel_id = c.id
+        WHERE b.user_id = ?
+          AND p.is_published = TRUE
+          AND (p.scheduled_at IS NULL OR p.scheduled_at <= NOW())
+          AND (p.expires_at IS NULL OR p.expires_at > NOW())
+        ORDER BY b.created_at DESC
+        LIMIT 50`,
+      [req.user.id]
+    );
+    res.json({ bookmarks: rows });
+  } catch (err) {
+    console.error('List bookmarks error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

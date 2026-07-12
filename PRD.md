@@ -1,7 +1,9 @@
 # RVCE Connect — The RVCE Broadcast PWA
 ## Central Product Requirement Document (PRD)
 
-> **STATUS UPDATE (12 June 2026):** The app is **functionally complete** for its core scope. Backend, MySQL schema, JWT auth, the role-based feed/composer, channel subscriptions with a per-community notification **bell**, **real Web Push (VAPID)**, admin **community management** (create/delete with custom logos), **auto-archiving of expired posts**, a hybrid-caching **service worker** with background sync, an installable **manifest** (26 fields), and a unified **light/dark theme** across all pages are all **implemented and running**. Real-time chat, the academic calendar, placement RSVPs, and Kannada i18n remain **future scope** (their tables/vision are retained below as the longer-term roadmap).
+> **STATUS UPDATE (12 July 2026):** The app is **functionally complete** for its core campus-forum scope. Implemented and running: JWT role portals, personalized **student Dashboard**, department targeting + board browse, subscriptions + push **bell**, scheduled publish + **notice expiry automation** (5‑min job), **publisher Analytics** (views/likes/bookmarks/CTR/reach/heatmaps/charts), assignments, bookmarks UI, admin community CRUD + archive, unified light/dark theme, and a full **PWA** layer (install banner, hybrid SW cache, offline drafts, offline likes/bookmarks, Background Sync, Periodic Sync, Share Target, file handlers, Web Share).  
+> Future scope remains: real-time chat, academic calendar, placement RSVPs, Kannada i18n, live attendance alerts.  
+> Authoritative feature inventory: **`PROJECT_REPORT.md`**. Authoritative schema: **`db/schema.sql`** (+ boot migrations).
 >
 > The app was renamed from *CampusConnect* to **RVCE Connect**.
 
@@ -13,14 +15,17 @@ These decisions were taken during build and supersede conflicting statements els
 
 - **All communities are public.** The `clubs.is_restricted` approval flow is removed; every subscription is auto-approved. The column is retained but locked to `FALSE`, and the old approval endpoint returns `410 Gone`.
 - **Subscribe + Bell model.** "Join" is replaced by **Subscribe** (adds a channel's posts to the feed). A separate **bell** toggle per community is the **push-notification opt-in** — subscribing alone never sends push. Bell-on registers a real Web Push subscription and sets `subscriptions.push_notifications_enabled = TRUE`.
-- **Admin-only post deletion.** Publishers can no longer delete posts (API returns `403`); admin deletions are written to `audit_logs`. The bookmark/"Save Post" control is removed from the UI.
-- **Publisher default tab.** Publishers land on the **Compose** tab on every (re)open; the Post tab is always visible to them.
-- **Moderation panel hidden** (frontend `display:none`) per product decision; the reports backend remains intact.
-- **Composer "From" + "Expires On".** A required *Post From Community* selector (maps to `channel_id`) and an optional *auto-remove* `expires_at` datetime were added; expired posts are filtered from feeds and **archived** to an `expired_posts` table by a 15-minute in-process job.
-- **Publishers post from owned *or* joined communities.** A publisher's "From" list (and the server-side check) includes communities they own (assigned department / managed clubs) **and** any community they have subscribed to — so a publisher can broadcast to any community they've joined.
-- **Admin community CRUD.** Admins create a brand-new department/club **and** its channel in one step (with an optional **custom logo** upload), and can delete communities (posts are detached to college-wide, not cascade-deleted).
-- **Viewer-only self-registration.** Signup no longer asks for a role — everyone registers as an active **viewer**; only an admin can **promote** to publisher.
-- **Unified theme + dark mode.** One RVCE-green design system with a persistent light/dark toggle on every page (login, app, offline).
+- **Admin-only post deletion.** Publishers can no longer delete posts (API returns `403`); admin deletions are written to `audit_logs`.
+- **Bookmarks are live.** Table + toggle API + feed Save button + student Dashboard bookmarks section.
+- **Publisher default tab.** Publishers land on the **Compose** tab on every (re)open; the Post tab is always visible to them. Students land on **Dashboard**.
+- **Moderation panel hidden** (frontend `display:none`) per product decision; backend stubs may remain.
+- **Composer From + Visible To + Expires On + Schedule.** Required community + audience targeting; required `expires_at` (default +7 days); schedule accepts **now** (publish immediately) or future (queue). Expiry job archives to `expired_posts` every **5 minutes**.
+- **Publishers post from owned or joined communities.** "From" lists communities they own and any they subscribed to.
+- **Admin community CRUD.** Create department/club + channel (+ logo); delete detaches posts to college-wide.
+- **Role-aware registration** on each portal; students auto-subscribe to their department board.
+- **Unified theme + dark mode** with contrast pass for badges/forms/alerts.
+- **Analytics & dashboard.** Publisher Analytics API/UI; student personalized Dashboard API/UI; view/click tracking tables.
+- **PWA extras.** Custom install prompt, Periodic Sync, Share Target (`/share`), file handlers, offline engagement queue.
 
 ---
 
@@ -94,30 +99,35 @@ graph TD
 
 ### ✅ Completed & Running
 
+> For the full feature inventory used as the college forum **project report**, see **`PROJECT_REPORT.md`**.
+
 #### Backend & Database
-- **Database schema (actual, in `db/schema.sql`)** — 12 implemented tables (MySQL 8, InnoDB):
+- **Database schema (actual, in `db/schema.sql` + boot migrations)** — core tables:
   `departments`, `users`, `clubs`, `channels`, `subscriptions` (with `push_notifications_enabled`),
-  `posts` (with `expires_at`, `community_name`), `likes`, `bookmarks`, `stories`,
-  `expired_posts` (archive), `audit_logs`, and `push_subscriptions`.
-  - Seed data uses `INSERT IGNORE` so the schema can be re-applied idempotently.
-  - Column migrations (`subscriptions.push_notifications_enabled`, `posts.community_name`, `channels.logo_url`) run idempotently in JS at boot (MySQL 8 has no `ADD COLUMN IF NOT EXISTS`).
-- **Authentication** — JWT login/register; **self-registration creates active viewers only**; admins promote to publisher.
+  `posts` (with `expires_at`, `scheduled_at`, `is_published`, `community_name`), `post_target_channels`,
+  `likes`, `bookmarks`, `stories`, `expired_posts`, `audit_logs`, `push_subscriptions`,
+  plus **`assignments`**, **`post_views`**, **`post_clicks`**.
+  - Seed data uses `INSERT IGNORE` (idempotent).
+  - JS boot migrations add missing columns/tables and backfill expiry / dept subscriptions.
+- **Authentication** — JWT login/register on role portals; live role/ban checks in middleware.
 - **API route modules** — `/api/auth`, `/api/users`, `/api/channels`, `/api/posts`, `/api/subscriptions`,
-  `/api/admin`, `/api/clubs`, `/api/departments`, and **`/api/push`** (VAPID key + subscribe/unsubscribe).
-- **Web Push (VAPID)** — `web-push` configured from `.env`; new posts fan out to bell-enabled subscribers of the channel (dead endpoints pruned on 404/410).
-- **Expiry job** — `scripts/expire-posts.js` archives expired posts into `expired_posts`, run on boot and every 15 min via `setInterval`, wrapped in try/catch.
-- **Middleware** — JWT + role guards (`requireAdmin`, `requirePublisher`, `requireViewer`).
-- **File uploads** — Multer for post images and community logos (served from `/uploads`).
+  `/api/admin`, `/api/clubs`, `/api/departments`, `/api/push`, **`/api/dashboard`**, **`/api/analytics`**.
+- **Web Push (VAPID)** — fan-out to bell-enabled subscribers; dead endpoints pruned.
+- **Jobs (every 5 min)** — publish due scheduled posts; archive expired posts to `expired_posts`.
+- **File uploads** — Multer for post images, community logos, and PWA share-target media (`/share`).
 - **Docker** — `docker-compose.yml` runs MySQL 8 (host port 3307).
 
 #### Frontend
-- **PWA** — hybrid-caching service worker (Cache-First shell, Network-First posts/channels, **Background Sync** queue for offline publisher posts), `/offline.html` fallback, installable manifest with **26 fields** (icons 72–512, screenshots, shortcuts, share_target, display_override, edge_side_panel, protocol_handlers, handle_links, user_preferences dark colors).
-- **UI** — Bootstrap 5 + Bootstrap Icons + custom token-driven CSS; **unified light/dark theme** (`theme.js`) persisted in `localStorage`, with a toggle on every page.
-- **Pages** — login (`index.html`), app shell (`app.html`), offline (`offline.html`).
-- **Feed** — global read-only feed (newest-first, expired posts hidden), type filters, dept filter, debounced search, like, "From: <community>" badge, image fallbacks.
-- **Composer** — required *Post From Community* + optional *Expires On*; offline submissions queue to IndexedDB and sync on reconnect.
-- **Communities** — Subscribe / Subscribed (click to unsubscribe) + per-community **bell** with browser-permission handling and clear errors (insecure context / unsupported / denied).
-- **Admin dashboard** — stats, member directory with **search**, ban/unban, promote; **community management** (create dept/club + channel with custom logo; delete with post-detachment); read-only **archived posts** viewer.
+- **PWA** — install banner, hybrid SW cache, Background Sync (drafts + likes/bookmarks), Periodic Sync,
+  Share Target, file handlers, offline.html, Web Share API.
+- **UI** — Bootstrap 5 + Chart.js + token-driven light/dark CSS (dark-mode contrast pass).
+- **Pages** — role portal, three login pages, `app.html`, offline page.
+- **Student Dashboard** — department board, today’s updates, deadlines, events, clubs, assignments, bookmarks.
+- **Feed** — personalized + department browse, filters, search, like, bookmark, share, view/click tracking.
+- **Composer** — From, Visible To, schedule (now OK), required expiry, offline drafts.
+- **Communities** — subscribe + bell; overflow-safe cards.
+- **Publisher Analytics** — KPIs, charts, heatmap, top posts.
+- **Admin dashboard** — stats, members, communities, archived posts.
 - **JS modules** — `api.js`, `login.js`, `app.js`, `sw-register.js` (+ IndexedDB `CCQueue`), `theme.js`.
 
 #### Security & Administration

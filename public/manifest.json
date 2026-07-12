@@ -25,7 +25,7 @@
     {
       "src": "/icons/ssmbl.jpg",
       "sizes": "1080x1721",
-      "type": "image/png",
+      "type": "image/jpeg",
       "form_factor": "narrow",
       "label": "RVCE Connect Feed on Mobile"
     },
@@ -60,7 +60,13 @@
       "src": "/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icons/icon-256.png",
@@ -72,7 +78,13 @@
       "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -114,14 +126,36 @@
     }
   ],
   "share_target": {
-    "action": "/app.html",
-    "method": "GET",
-    "enctype": "application/x-www-form-urlencoded",
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
     "params": {
       "title": "title",
-      "text": "body"
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "media",
+          "accept": ["image/*"]
+        }
+      ]
     }
   },
+  "file_handlers": [
+    {
+      "action": "/app.html?tab=compose&share=1",
+      "accept": {
+        "image/*": [".png", ".jpg", ".jpeg", ".webp", ".gif"]
+      },
+      "icons": [
+        {
+          "src": "/icons/icon-96.png",
+          "sizes": "96x96"
+        }
+      ],
+      "launch_type": "single-client"
+    }
+  ],
   "display_override": [
     "window-controls-overlay",
     "standalone",

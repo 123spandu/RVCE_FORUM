@@ -22,6 +22,25 @@
 
 <body>
 
+  <!-- PWA Install Prompt -->
+  <div id="pwaInstallBanner" class="pwa-install-banner d-none" role="dialog" aria-label="Install app">
+    <div class="container py-2 d-flex flex-wrap align-items-center gap-2 justify-content-between">
+      <div class="d-flex align-items-center gap-2 min-w-0">
+        <img src="/icons/icon-96.png" alt="" width="40" height="40" class="rounded-3 flex-shrink-0">
+        <div class="min-w-0">
+          <div class="fw-800 small mb-0">Install RVCE Connect</div>
+          <div class="text-muted" style="font-size:0.75rem">Add to your home screen for offline access &amp; faster launch</div>
+        </div>
+      </div>
+      <div class="d-flex gap-2 flex-shrink-0">
+        <button type="button" class="btn btn-sm btn-light rounded-pill" id="pwaInstallDismiss">Not now</button>
+        <button type="button" class="btn btn-sm btn-primary rounded-pill" id="pwaInstallBtn">
+          <i class="bi bi-download me-1"></i>Install
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Premium Bottom Nav for Mobile / Top Nav for Desktop -->
   <nav class="navbar navbar-light sticky-top py-2">
     <div class="container d-flex justify-content-between align-items-center">
@@ -36,12 +55,15 @@
       </a>
 
       <div class="d-flex align-items-center gap-3">
-        <div class="position-relative d-none d-md-block">
-          <input type="text" id="globalSearch" class="form-control form-control-sm rounded-pill"
-            placeholder="Search notices, events..." style="width: 250px; background: #f1f5f9; border: none;">
+        <div class="position-relative flex-grow-1 flex-md-grow-0" style="max-width: 250px;">
+          <input type="text" id="globalSearch" class="form-control form-control-sm rounded-pill cc-search-input"
+            placeholder="Search notices, events...">
           <i class="bi bi-search position-absolute text-muted" style="right: 12px; top: 6px;"></i>
         </div>
-        <span class="text-muted small fw-600" id="whoAmI"></span>
+        <span class="badge bg-warning text-dark d-none" id="offlineBadge" title="You are offline">
+          <i class="bi bi-wifi-off me-1"></i>Offline
+        </span>
+        <span class="text-muted small fw-600 d-none d-sm-inline" id="whoAmI"></span>
         <button class="btn btn-sm btn-light rounded-circle" data-theme-toggle type="button" title="Toggle dark mode" aria-label="Toggle dark mode">
           <i class="bi bi-moon-stars-fill"></i>
         </button>
@@ -55,13 +77,21 @@
   <!-- Navigation System -->
   <div class="container mt-3">
     <ul class="nav nav-tabs shadow-sm mb-4" id="mainTabs">
+      <li class="nav-item flex-fill" id="tabHome">
+        <a class="nav-link active text-center" data-tab="home" href="#"><i class="bi bi-speedometer2"></i> <span
+            class="d-none d-md-inline ms-1">Dashboard</span></a>
+      </li>
       <li class="nav-item flex-fill">
-        <a class="nav-link active text-center" data-tab="feed" href="#"><i class="bi bi-grid-1x2"></i> <span
+        <a class="nav-link text-center" data-tab="feed" href="#"><i class="bi bi-grid-1x2"></i> <span
             class="d-none d-md-inline ms-1">Feed</span></a>
       </li>
       <li class="nav-item flex-fill d-none" id="tabCompose">
         <a class="nav-link text-center" data-tab="compose" href="#"><i class="bi bi-plus-circle"></i> <span
             class="d-none d-md-inline ms-1">Post</span></a>
+      </li>
+      <li class="nav-item flex-fill d-none" id="tabAnalytics">
+        <a class="nav-link text-center" data-tab="analytics" href="#"><i class="bi bi-bar-chart-line"></i> <span
+            class="d-none d-md-inline ms-1">Analytics</span></a>
       </li>
       <li class="nav-item flex-fill">
         <a class="nav-link text-center" data-tab="subs" href="#"><i class="bi bi-people"></i> <span
@@ -81,9 +111,100 @@
 
   <main class="container mb-5" id="appMain">
 
+    <!-- ============ PERSONALIZED HOME (Student Dashboard) ============ -->
+    <section data-pane="home">
+      <div class="dash-hero mb-4">
+        <div class="dash-hero-inner">
+          <p class="dash-eyebrow mb-1">Student dashboard</p>
+          <h2 class="fw-800 mb-1" id="dashGreeting">Welcome back</h2>
+          <p class="mb-0 text-muted small" id="dashSubtitle">Your department board, today’s updates, deadlines, events, and saved notices.</p>
+        </div>
+      </div>
+
+      <div class="row g-3" id="dashGrid">
+        <div class="col-12" id="dashDeptWrap">
+          <div class="dash-panel">
+            <div class="dash-panel-head">
+              <h3 class="dash-panel-title"><i class="bi bi-building me-2"></i><span id="dashDeptTitle">My Department</span></h3>
+              <a href="#" class="small fw-600 dash-link" id="dashDeptOpenFeed">Open board</a>
+            </div>
+            <div id="dashDepartment" class="dash-panel-body"></div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-6">
+          <div class="dash-panel h-100">
+            <div class="dash-panel-head">
+              <h3 class="dash-panel-title"><i class="bi bi-sunrise me-2"></i>Today’s Updates</h3>
+            </div>
+            <div id="dashToday" class="dash-panel-body"></div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-6">
+          <div class="dash-panel h-100">
+            <div class="dash-panel-head">
+              <h3 class="dash-panel-title"><i class="bi bi-hourglass-split me-2"></i>Upcoming Deadlines</h3>
+            </div>
+            <div id="dashDeadlines" class="dash-panel-body"></div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-6">
+          <div class="dash-panel h-100">
+            <div class="dash-panel-head">
+              <h3 class="dash-panel-title"><i class="bi bi-calendar-event me-2"></i>Events</h3>
+            </div>
+            <div id="dashEvents" class="dash-panel-body"></div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-6">
+          <div class="dash-panel h-100">
+            <div class="dash-panel-head">
+              <h3 class="dash-panel-title"><i class="bi bi-people me-2"></i>Subscribed Clubs</h3>
+              <a href="#" class="small fw-600 dash-link" data-tab-jump="subs">Manage</a>
+            </div>
+            <div id="dashClubs" class="dash-panel-body"></div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-6">
+          <div class="dash-panel h-100 dash-panel-muted">
+            <div class="dash-panel-head">
+              <h3 class="dash-panel-title"><i class="bi bi-clipboard-check me-2"></i>Attendance Alerts</h3>
+              <span class="badge bg-secondary-subtle text-secondary border">Soon</span>
+            </div>
+            <div id="dashAttendance" class="dash-panel-body"></div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-6">
+          <div class="dash-panel h-100">
+            <div class="dash-panel-head">
+              <h3 class="dash-panel-title"><i class="bi bi-journal-text me-2"></i>Assignments</h3>
+            </div>
+            <div id="dashAssignments" class="dash-panel-body"></div>
+          </div>
+        </div>
+        <div class="col-12">
+          <div class="dash-panel">
+            <div class="dash-panel-head">
+              <h3 class="dash-panel-title"><i class="bi bi-bookmark-star me-2"></i>Bookmarks</h3>
+            </div>
+            <div id="dashBookmarks" class="dash-panel-body dash-bookmarks"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ FEED ============ -->
-    <section data-pane="feed">
+    <section data-pane="feed" class="d-none">
  
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div>
+          <h2 class="h5 fw-800 mb-0" id="feedTitle">Campus Feed</h2>
+          <p class="small text-muted mb-0" id="feedSubtitle">College-wide notices plus communities you follow</p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill d-none" id="clearDeptFilterBtn">
+          <i class="bi bi-x-circle me-1"></i>Clear department filter
+        </button>
+      </div>
+
       <div class="filter-bar mb-4 overflow-x-auto">
         <button class="btn btn-sm btn-dark rounded-pill feed-filter active" data-type="">All</button>
         <button class="btn btn-sm btn-outline-secondary rounded-pill feed-filter" data-type="event">Events</button>
@@ -93,8 +214,8 @@
           data-type="placement talk">Placements</button>
         <button class="btn btn-sm btn-outline-secondary rounded-pill feed-filter" data-type="circular">Notices</button>
         <div class="ms-auto d-flex gap-2">
-          <select id="deptFilter" class="form-select form-select-sm rounded-pill border-0 bg-light"
-            style="width: auto;">
+          <select id="deptFilter" class="form-select form-select-sm rounded-pill"
+            style="width: auto; min-width: 12rem;" title="Browse a department notice board">
             <option value="">All Departments</option>
           </select>
         </div>
@@ -109,18 +230,33 @@
     <section data-pane="compose" class="d-none">
       <div class="row justify-content-center">
         <div class="col-lg-8">
+          <!-- Offline Sync status banner -->
+          <div id="offlineSyncBanner" class="alert d-none align-items-center gap-2 mb-3 rounded-4 border-0 shadow-sm" role="status">
+            <i class="bi bi-cloud-arrow-up-fill fs-5" id="offlineSyncBannerIcon"></i>
+            <div class="flex-grow-1">
+              <div class="fw-700" id="offlineSyncBannerTitle">Offline Sync</div>
+              <div class="small" id="offlineSyncBannerText"></div>
+            </div>
+            <button type="button" class="btn btn-sm btn-light rounded-pill d-none" id="offlineSyncNowBtn">Sync now</button>
+          </div>
+
           <div class="card shadow-sm border-0 p-4 rounded-4">
-            <h4 class="fw-800 mb-4">Create Announcement</h4>
+            <div class="d-flex justify-content-between align-items-start mb-4 gap-2 flex-wrap">
+              <h4 class="fw-800 mb-0">Create Announcement</h4>
+              <span class="badge rounded-pill bg-secondary-subtle text-dark border d-none" id="composeOfflineHint">
+                <i class="bi bi-wifi-off me-1"></i>Offline — drafts will auto-sync
+              </span>
+            </div>
             <form id="composeForm">
               <div class="mb-4">
                 <label class="form-label fw-600">Title</label>
-                <input id="postTitle" type="text" class="form-control rounded-3 border-light bg-light"
+                <input id="postTitle" type="text" class="form-control rounded-3"
                   placeholder="What's happening?" required>
               </div>
 
               <div class="mb-4">
                 <label class="form-label fw-600">Content</label>
-                <textarea id="postContent" class="form-control rounded-4 border-light bg-light" rows="6"
+                <textarea id="postContent" class="form-control rounded-4" rows="6"
                   placeholder="Share more details..."></textarea>
               </div>
 
@@ -132,7 +268,7 @@
               <div class="row g-3 mb-4">
                 <div class="col-md-6">
                   <label class="form-label fw-600">Post Category</label>
-                  <select id="postType" class="form-select rounded-3 border-light bg-light" required>
+                  <select id="postType" class="form-select rounded-3" required>
                     <option value="" disabled selected>Select type</option>
                     <option value="event">Event</option>
                     <option value="hackathon">Hackathon</option>
@@ -145,7 +281,7 @@
                 </div>
                 <div class="col-md-6">
                   <label class="form-label fw-600">Post From Community</label>
-                  <select id="fromCommunity" class="form-select rounded-3 border-light bg-light" required>
+                  <select id="fromCommunity" class="form-select rounded-3" required>
                     <option value="" disabled selected>Select community</option>
                   </select>
                   <div class="invalid-feedback d-block d-none" id="fromCommunityError"></div>
@@ -153,7 +289,7 @@
               </div>
 
               <div class="mb-4">
-                <label class="form-label fw-600">Audience</label>
+                <label class="form-label fw-600">Visible To <span class="text-danger">*</span></label>
                 <div class="dropdown">
                   <button class="btn btn-outline-secondary rounded-3 w-100 d-flex justify-content-between align-items-center"
                     type="button" id="audienceDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside"
@@ -161,18 +297,18 @@
                     <span id="audienceLabel"><i class="bi bi-globe me-2"></i>Everyone</span>
                     <i class="bi bi-chevron-down"></i>
                   </button>
-                  <ul class="dropdown-menu w-100 p-2 shadow" style="max-height:280px; overflow-y:auto"
+                  <ul class="dropdown-menu w-100 p-2 shadow" style="max-height:300px; overflow-y:auto"
                     id="audienceMenu" aria-labelledby="audienceDropdownBtn">
                     <li>
                       <div class="form-check">
                         <input class="form-check-input" type="radio" name="audienceMode" id="audienceAll" value="all" checked>
-                        <label class="form-check-label fw-600" for="audienceAll">Everyone (college-wide)</label>
+                        <label class="form-check-label fw-600" for="audienceAll">Everyone in the institution</label>
                       </div>
                     </li>
                     <li>
                       <div class="form-check">
                         <input class="form-check-input" type="radio" name="audienceMode" id="audienceDepts" value="communities">
-                        <label class="form-check-label fw-600" for="audienceDepts">Selected communities only</label>
+                        <label class="form-check-label fw-600" for="audienceDepts">Specific departments / groups</label>
                       </div>
                     </li>
                     <li><hr class="dropdown-divider"></li>
@@ -183,30 +319,139 @@
                     </li>
                   </ul>
                 </div>
-                <small class="text-muted">Choose who sees this post. Restricted posts still notify subscribers as usual.</small>
+                <small class="text-muted" id="audienceHelp">
+                  College-wide notices go to everyone. Restrict to one or more departments so only those students see it.
+                </small>
+                <div class="invalid-feedback d-block d-none" id="audienceError"></div>
               </div>
 
               <div class="row g-3 mb-4">
                 <div class="col-md-6">
                   <label class="form-label fw-600">Schedule Posting (Optional)</label>
-                  <input id="scheduledAt" type="datetime-local" class="form-control rounded-3 border-light bg-light">
+                  <input id="scheduledAt" type="datetime-local" class="form-control rounded-3">
+                  <small class="text-muted">Leave empty or pick the current time to publish now. A future time keeps it hidden until then.</small>
+                  <div class="invalid-feedback d-block d-none" id="scheduledAtError"></div>
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label fw-600">Post Expires On (Auto-remove)</label>
-                  <input id="endDate" type="datetime-local" class="form-control rounded-3 border-light bg-light">
-                  <small class="text-muted">Post will be automatically removed from the feed after this date.</small>
+                  <label class="form-label fw-600">Expires On (required) <span class="text-danger">*</span></label>
+                  <input id="endDate" type="datetime-local" class="form-control rounded-3" required>
+                  <small class="text-muted">
+                    Every notice expires automatically and moves to the admin archive — no manual deletion needed.
+                    Defaults to 7 days from now.
+                  </small>
                   <div class="invalid-feedback d-block d-none" id="endDateError"></div>
                 </div>
               </div>
 
-              <div class="d-grid">
+              <div class="d-grid gap-2">
                 <button class="btn btn-primary btn-lg rounded-pill fw-bold py-3 shadow-lg" type="submit"
                   id="composeBtn">
                   Publish Post <i class="bi bi-arrow-right ms-2"></i>
                 </button>
+                <button class="btn btn-outline-secondary rounded-pill fw-semibold" type="button" id="saveOfflineDraftBtn">
+                  <i class="bi bi-cloud-arrow-down me-1"></i> Save Offline Draft
+                </button>
+                <small class="text-muted text-center">
+                  Offline drafts are stored on this device and <strong>auto-sync</strong> when internet returns.
+                </small>
               </div>
             </form>
           </div>
+
+          <!-- Pending offline drafts list -->
+          <div class="card shadow-sm border-0 p-4 rounded-4 mt-3 d-none" id="offlineDraftsCard">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="fw-800 mb-0"><i class="bi bi-arrow-repeat me-2"></i>Offline Sync Queue</h5>
+              <button type="button" class="btn btn-sm btn-primary rounded-pill" id="syncDraftsBtn">
+                <i class="bi bi-cloud-upload me-1"></i>Sync all
+              </button>
+            </div>
+            <div id="offlineDraftsList" class="d-flex flex-column gap-2"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PUBLISHER ANALYTICS ============ -->
+    <section data-pane="analytics" class="d-none">
+      <div class="dash-hero mb-4">
+        <div class="dash-hero-inner d-flex flex-wrap justify-content-between align-items-end gap-2">
+          <div>
+            <p class="dash-eyebrow mb-1">Publisher insights</p>
+            <h2 class="fw-800 mb-1">Analytics</h2>
+            <p class="mb-0 text-muted small" id="analyticsScopeLabel">Views, engagement, reach, and when your campus is most active.</p>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-success rounded-pill" id="analyticsRefreshBtn">
+            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+          </button>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-4" id="pubAnalyticsKpis"></div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-lg-8">
+          <div class="dash-panel h-100">
+            <div class="dash-panel-head">
+              <h3 class="dash-panel-title"><i class="bi bi-graph-up me-2"></i>Engagement (14 days)</h3>
+            </div>
+            <div class="analytics-chart-wrap">
+              <canvas id="chartEngagement" height="140"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="dash-panel h-100">
+            <div class="dash-panel-head">
+              <h3 class="dash-panel-title"><i class="bi bi-clock-history me-2"></i>Most Active Time</h3>
+            </div>
+            <div class="mb-2 small text-muted" id="peakHourLabel">—</div>
+            <div class="analytics-chart-wrap">
+              <canvas id="chartActiveHours" height="160"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+          <div class="dash-panel h-100">
+            <div class="dash-panel-head">
+              <h3 class="dash-panel-title"><i class="bi bi-building me-2"></i>Department Reach</h3>
+            </div>
+            <div class="analytics-chart-wrap">
+              <canvas id="chartDeptReach" height="180"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-6">
+          <div class="dash-panel h-100">
+            <div class="dash-panel-head">
+              <h3 class="dash-panel-title"><i class="bi bi-grid-3x3-gap me-2"></i>Activity Heatmap</h3>
+              <span class="small text-muted">Last 30 days</span>
+            </div>
+            <div id="analyticsHeatmap" class="analytics-heatmap" aria-label="Engagement heatmap by day and hour"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dash-panel mb-3">
+        <div class="dash-panel-head">
+          <h3 class="dash-panel-title"><i class="bi bi-trophy me-2"></i>Top Posts</h3>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0" id="analyticsTopPostsTable">
+            <thead class="text-muted small">
+              <tr>
+                <th>Post</th>
+                <th class="text-end">Views</th>
+                <th class="text-end">Likes</th>
+                <th class="text-end">Bookmarks</th>
+                <th class="text-end">CTR</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -226,8 +471,8 @@
                 <h5 class="fw-800 mb-0">Member Directory</h5>
                 <div class="d-flex align-items-center gap-2 ms-auto">
                   <div class="position-relative">
-                    <input type="text" id="memberSearch" class="form-control form-control-sm rounded-pill"
-                      placeholder="Search members…" style="width: 220px; background:#f1f5f9; border:none;">
+                    <input type="text" id="memberSearch" class="form-control form-control-sm rounded-pill cc-search-input"
+                      placeholder="Search members…" style="width: 220px;">
                     <i class="bi bi-search position-absolute text-muted" style="right: 12px; top: 7px;"></i>
                   </div>
                   <button class="btn btn-sm btn-light rounded-pill" id="refreshUsersBtn" title="Refresh members"><i
@@ -266,14 +511,20 @@
             </div>
           </div>
 
-          <!-- Archived (expired) posts — read only -->
+          <!-- Archived (expired) posts — filled automatically by expiry job -->
           <div class="card shadow-sm border-0 rounded-4 mb-4">
             <div class="card-body p-4">
               <button class="btn btn-sm btn-light rounded-pill w-100 d-flex justify-content-between align-items-center"
                 type="button" data-bs-toggle="collapse" data-bs-target="#archivedPostsCollapse">
                 <span class="fw-800"><i class="bi bi-archive me-2"></i>Archived Posts</span>
-                <i class="bi bi-chevron-down"></i>
+                <span class="d-flex align-items-center gap-2">
+                  <span class="badge bg-secondary" id="archivedPostsCount">0</span>
+                  <i class="bi bi-chevron-down"></i>
+                </span>
               </button>
+              <p class="small text-muted mt-2 mb-0">
+                Notices expire automatically and land here — no manual deletion required.
+              </p>
               <div class="collapse mt-3" id="archivedPostsCollapse">
                 <div id="archivedPostsList" class="small"></div>
               </div>
@@ -318,7 +569,14 @@
 
     <!-- ============ SUBSCRIPTIONS ============ -->
     <section data-pane="subs" class="d-none">
-      <div id="communitiesList" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3"></div>
+      <div class="mb-3">
+        <h4 class="fw-800 mb-1">Communities</h4>
+        <p class="text-muted small mb-0">
+          Subscribe to departments and clubs to follow their updates in your feed.
+          Use the bell after subscribing to also get push notifications.
+        </p>
+      </div>
+      <div id="communitiesList" class="row row-cols-1 row-cols-lg-2 g-3"></div>
     </section>
 
   </main>
@@ -380,7 +638,9 @@
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
   <script src="/js/sw-register.js"></script>
+  <script src="/js/pwa-extras.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/app.js"></script>
 </body>

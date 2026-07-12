@@ -18,6 +18,10 @@
     for (var i = 0; i < icons.length; i++) {
       icons[i].className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
     }
+    // Let charts / panels redraw with readable theme colors.
+    try {
+      window.dispatchEvent(new CustomEvent('cc-theme-change', { detail: { theme: theme } }));
+    } catch (_) {}
   }
 
   // Apply immediately at parse time (runs in <head>).

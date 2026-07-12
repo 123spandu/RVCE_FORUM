@@ -1,20 +1,19 @@
-// service-worker.js — CampusConnect PWA: role-aware hybrid caching + background sync
-const SHELL_CACHE = 'cc-shell-v6';   // App shell (HTML, CSS, JS, icons, fonts)
-const POSTS_CACHE = 'cc-posts-v1';   // API GET responses (posts/channels)
+// service-worker.js — CampusConnect PWA: hybrid caching + background sync + push
+const SHELL_CACHE = 'cc-shell-v15';   // App shell (HTML, CSS, JS, icons, fonts)
+const POSTS_CACHE = 'cc-posts-v2';   // API GET responses (posts/channels)
 const OFFLINE_QUEUE = 'cc-queue-v1'; // Reserved cache name (queue itself lives in IndexedDB)
 
 const SHELL_ASSETS = [
   '/', '/index.html', '/app.html', '/offline.html',
+  '/login-admin.html', '/login-publisher.html', '/login-viewer.html',
   '/css/styles.css',
-  '/js/app.js', '/js/api.js', '/js/login.js', '/js/sw-register.js', '/js/theme.js',
+  '/js/app.js', '/js/api.js', '/js/login.js', '/js/sw-register.js', '/js/theme.js', '/js/pwa-extras.js',
   '/manifest.json',
   '/icons/icon-192.png', '/icons/icon-512.png',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css'
+  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css',
+  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js'
 ];
-
-// Current user role, set at runtime via postMessage from sw-register.js.
-let currentRole = 'viewer';
 
 // ---- Install: pre-cache the app shell (Cache First targets) ----
 self.addEventListener('install', event => {
@@ -40,13 +39,6 @@ self.addEventListener('activate', event => {
   );
 });
 
-// ---- Receive role from the page ----
-self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SET_ROLE') {
-    currentRole = event.data.role || 'viewer';
-  }
-});
-
 // ---- Fetch routing ----
 self.addEventListener('fetch', event => {
   const req = event.request;
@@ -58,10 +50,8 @@ self.addEventListener('fetch', event => {
 
   // POST /api/posts is intentionally NOT intercepted here. When offline the
   // request must fail so the page's compose handler catches it and persists the
-  // payload to IndexedDB (window.CCQueue). If the SW answered with a synthetic
-  // "queued" response, res.ok would be true, the page would skip queueing, and
-  // the post would be silently lost. The queue is replayed by syncPendingPosts
-  // (Background Sync) and/or the page's own reconnect flush.
+  // payload to IndexedDB (window.CCQueue). The queue is replayed by Background
+  // Sync (asks open clients to flush) and/or the page's own reconnect flush.
   if (req.method !== 'GET') return; // writes: network only (page handles offline queueing)
 
   // Posts & channels feeds: Network First, fall back to cache.
@@ -126,12 +116,50 @@ async function networkFirst(req, cacheName) {
   }
 }
 
-// ---- Offline post replay ----
-// Queued offline posts are replayed entirely by the page (app.js
-// maybeFlushQueue) on the `online` event and on load. That path is reliable
-// across browsers and runs as a single owner, so there is no Background Sync
-// `sync` handler here — having both replay the same IndexedDB queue on
-// reconnect would risk publishing a post twice.
+// ---- Background Sync: ask open app windows to flush IndexedDB queue ----
+// The page owns the flush (maybeFlushQueue) so JWT + payload stay consistent.
+// Sync wakes those clients when connectivity returns even if the tab was idle.
+self.addEventListener('sync', event => {
+  if (event.tag === 'sync-pending-posts') {
+    event.waitUntil(notifyClientsFlush('FLUSH_PENDING_POSTS', '/app.html?tab=compose&sync=1'));
+    return;
+  }
+  if (event.tag === 'sync-pending-actions') {
+    event.waitUntil(notifyClientsFlush('FLUSH_PENDING_ACTIONS', '/app.html?sync=actions'));
+  }
+});
+
+async function notifyClientsFlush(messageType, fallbackUrl) {
+  const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  if (clientsList.length) {
+    clientsList.forEach(client => {
+      client.postMessage({ type: messageType });
+    });
+    return;
+  }
+  if (self.clients && self.clients.openWindow) {
+    await self.clients.openWindow(fallbackUrl);
+  }
+}
+
+// ---- Periodic Background Sync: refresh feed/channel caches while installed ----
+self.addEventListener('periodicsync', event => {
+  if (event.tag !== 'cc-refresh-feeds') return;
+  event.waitUntil((async () => {
+    try {
+      const cache = await caches.open(POSTS_CACHE);
+      const endpoints = ['/api/posts', '/api/channels'];
+      await Promise.all(endpoints.map(async (path) => {
+        try {
+          const res = await fetch(path, { credentials: 'include' });
+          if (res && res.ok) await cache.put(path, res.clone());
+        } catch (_) { /* ignore individual failures */ }
+      }));
+    } catch (e) {
+      console.warn('Periodic feed refresh failed:', e);
+    }
+  })());
+});
 
 // ---- Push notifications ----
 self.addEventListener('push', event => {
