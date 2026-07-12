@@ -351,7 +351,7 @@ function startExpiryJob() {
 bootstrap()
   .then(() => {
     startExpiryJob();
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`\n🚀 Campus Connect running on http://localhost:${PORT}\n`);
     });
   })
