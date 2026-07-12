@@ -121,6 +121,20 @@ async function runMigrations() {
   await addColumnIfMissing('channels', 'logo_url', 'VARCHAR(255) NULL');
   // All communities are public now — lock is_restricted to FALSE
   await pool.query('UPDATE clubs SET is_restricted = FALSE WHERE is_restricted <> FALSE');
+  // Per-post audience targeting by community (channel — department OR club).
+  // A post with NO rows here is visible to everyone; rows restrict it to
+  // subscribers of the targeted channels (plus the author/admins).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS post_target_channels (
+      post_id INT NOT NULL,
+      channel_id INT NOT NULL,
+      PRIMARY KEY (post_id, channel_id),
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+      FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB
+  `);
+  // Drop the earlier department-only targeting table it replaces (no production data).
+  await pool.query('DROP TABLE IF EXISTS post_target_departments');
 }
 
 // Auto-archive expired posts on boot and every 15 minutes (simple in-process scheduler)

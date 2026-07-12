@@ -38,6 +38,22 @@ router.get('/', authRequired, async (req, res) => {
     } else {
       // Public feed: filter out posts whose expiry date has passed.
       whereClause += " AND (p.expires_at IS NULL OR p.expires_at > NOW())";
+
+      // Audience targeting: a post is visible when it targets NO community
+      // (broadcast to all), OR the viewer is an approved SUBSCRIBER of one of the
+      // targeted communities, OR the viewer authored it. Admins bypass targeting.
+      if (me.role !== 'admin') {
+        whereClause += ` AND (
+          NOT EXISTS (SELECT 1 FROM post_target_channels ptc WHERE ptc.post_id = p.id)
+          OR EXISTS (
+            SELECT 1 FROM post_target_channels ptc
+            JOIN subscriptions s ON s.channel_id = ptc.channel_id
+            WHERE ptc.post_id = p.id AND s.subscriber_id = ? AND s.status = 'approved'
+          )
+          OR p.publisher_id = ?
+        )`;
+        params.push(me.id, me.id);
+      }
     }
 
     // UI Team's advanced filters
@@ -87,7 +103,7 @@ router.get('/', authRequired, async (req, res) => {
 // POST /api/posts
 router.post('/', authRequired, requirePublisher, upload.single('image'), async (req, res) => {
   try {
-    const { title, content, target_type, post_type, post_level, department_ids, club_ids, expires_at } = req.body || {};
+    const { title, content, target_type, post_type, post_level, department_ids, club_ids, expires_at, visibility, target_channel_ids } = req.body || {};
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
     // Map UI variables to backend schema variables
@@ -164,11 +180,34 @@ router.post('/', authRequired, requirePublisher, upload.single('image'), async (
       expiresAt = d;
     }
 
+    // Resolve audience targeting. `visibility === 'communities'` restricts the post
+    // to the chosen community (channel) IDs — subscribers of those channels only;
+    // anything else (default) makes it visible to all. target_channel_ids may arrive
+    // as a JSON string (multipart form) or an array (offline JSON replay). Invalid/
+    // empty selections fall back to "visible to all".
+    let targetChannelIds = [];
+    if (visibility === 'communities' && target_channel_ids != null) {
+      try {
+        const raw = Array.isArray(target_channel_ids) ? target_channel_ids : JSON.parse(target_channel_ids);
+        targetChannelIds = [...new Set((raw || []).map(Number).filter(n => Number.isInteger(n) && n > 0))];
+      } catch (_) {
+        targetChannelIds = [];
+      }
+    }
+
     const [result] = await pool.query(
       `INSERT INTO posts (publisher_id, channel_id, title, body, level, type, image_url, community_name, is_pinned, expires_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [req.user.id, channel_id, title, body, level, type, imageUrl, communityName, false, expiresAt]
     );
+
+    // Persist community targeting (if any). No rows = visible to everyone.
+    if (targetChannelIds.length > 0) {
+      await pool.query(
+        'INSERT INTO post_target_channels (post_id, channel_id) VALUES ?',
+        [targetChannelIds.map(id => [result.insertId, id])]
+      );
+    }
 
     // Fire push notifications to bell-enabled subscribers (non-blocking).
     if (channel_id) {

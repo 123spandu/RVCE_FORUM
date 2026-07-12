@@ -94,6 +94,8 @@
       deptFilter.innerHTML = '<option value="">All Departments</option>' +
         departments.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
 
+      populateAudienceCommunities();
+
       // The compose tab may already be showing (publishers land on it) before
       // channels finished loading — (re)populate the "From" dropdown now.
       populateFromCommunity();
@@ -263,6 +265,91 @@
     fromCommunity.innerHTML = html;
   }
 
+  // ---- Audience (community targeting) dropdown ----
+  // Renders a checkbox per community (channel), grouped into Departments and Clubs.
+  // The radio "mode" decides whether the checkboxes apply: "all" ignores them
+  // (visible to everyone); "communities" restricts the post to SUBSCRIBERS of the
+  // checked communities.
+  function populateAudienceCommunities() {
+    const list = document.getElementById('audienceDeptList');
+    if (!list) return;
+    const depts = channelsCache.filter(c => c.type === 'department');
+    const clubs = channelsCache.filter(c => c.type === 'club');
+    const row = c => `
+      <div class="form-check audience-row" data-name="${escapeHtml(c.name).toLowerCase()}">
+        <input class="form-check-input audience-dept" type="checkbox" value="${c.id}" id="audCh${c.id}">
+        <label class="form-check-label small" for="audCh${c.id}">${escapeHtml(c.name)}</label>
+      </div>`;
+    const section = (title, items) => items.length
+      ? `<div class="text-muted text-uppercase fw-700 mt-1 mb-1" style="font-size:0.65rem; letter-spacing:.05em">${title}</div>${items.map(row).join('')}`
+      : '';
+    list.innerHTML = section('Departments', depts) + section('Clubs', clubs);
+    syncAudienceUI();
+  }
+
+  // Returns { visibility, ids } from the current dropdown state.
+  function getAudienceSelection() {
+    const modeEl = document.querySelector('input[name="audienceMode"]:checked');
+    const mode = modeEl ? modeEl.value : 'all';
+    const ids = Array.from(document.querySelectorAll('.audience-dept:checked')).map(c => Number(c.value));
+    return { visibility: mode === 'communities' && ids.length > 0 ? 'communities' : 'all', ids };
+  }
+
+  // Enable/disable the checkbox list and update the button label + count.
+  function syncAudienceUI() {
+    const modeEl = document.querySelector('input[name="audienceMode"]:checked');
+    const mode = modeEl ? modeEl.value : 'all';
+    const wrap = document.getElementById('audienceDeptListWrap');
+    const label = document.getElementById('audienceLabel');
+    const commMode = mode === 'communities';
+    if (wrap) wrap.classList.toggle('opacity-50', !commMode);
+    document.querySelectorAll('.audience-dept').forEach(c => { c.disabled = !commMode; });
+    const search = document.getElementById('audienceSearch');
+    if (search) search.disabled = !commMode;
+    if (!label) return;
+    if (commMode) {
+      const n = document.querySelectorAll('.audience-dept:checked').length;
+      label.innerHTML = n > 0
+        ? `<i class="bi bi-people me-2"></i>${n} communit${n > 1 ? 'ies' : 'y'}`
+        : `<i class="bi bi-people me-2"></i>Select communities…`;
+    } else {
+      label.innerHTML = '<i class="bi bi-globe me-2"></i>Everyone';
+    }
+  }
+
+  // Reset the audience picker back to "Everyone" (used after a successful post).
+  function resetAudienceSelection() {
+    const all = document.getElementById('audienceAll');
+    if (all) all.checked = true;
+    document.querySelectorAll('.audience-dept').forEach(c => { c.checked = false; });
+    const search = document.getElementById('audienceSearch');
+    if (search) search.value = '';
+    document.querySelectorAll('.audience-row').forEach(r => r.classList.remove('d-none'));
+    syncAudienceUI();
+  }
+
+  const audienceMenu = document.getElementById('audienceMenu');
+  if (audienceMenu) {
+    audienceMenu.addEventListener('change', (e) => {
+      // Checking a community implies "communities" mode.
+      if (e.target.classList.contains('audience-dept') && e.target.checked) {
+        const deptsRadio = document.getElementById('audienceDepts');
+        if (deptsRadio) deptsRadio.checked = true;
+      }
+      syncAudienceUI();
+    });
+    // Live filter the community list as the publisher types.
+    const search = document.getElementById('audienceSearch');
+    if (search) {
+      search.addEventListener('input', () => {
+        const q = search.value.trim().toLowerCase();
+        document.querySelectorAll('.audience-row').forEach(r => {
+          r.classList.toggle('d-none', q && !r.dataset.name.includes(q));
+        });
+      });
+    }
+  }
+
   composeForm.onsubmit = async (e) => {
     e.preventDefault();
     fromCommunityError.classList.add('d-none');
@@ -308,6 +395,11 @@
       fd.append('post_level', level);
       if (channelId) fd.append('channel_id', channelId);
       if (expiresAt) fd.append('expires_at', expiresAt);
+      const audience = getAudienceSelection();
+      fd.append('visibility', audience.visibility);
+      if (audience.visibility === 'communities') {
+        fd.append('target_channel_ids', JSON.stringify(audience.ids));
+      }
       const imgFile = document.getElementById('postImage').files[0];
       if (imgFile) fd.append('image', imgFile);
       return fd;
@@ -326,24 +418,29 @@
 
       alert('Announcement Published!');
       composeForm.reset();
+      resetAudienceSelection();
       activateTab('feed');
     } catch (err) {
       // Offline publisher queue: save the post and sync on reconnect.
       if ((err.name === 'TypeError' || !navigator.onLine) && user.role === 'publisher' && window.CCQueue) {
         try {
+          const offlineAudience = getAudienceSelection();
           await window.CCQueue.savePendingPost({
             title: document.getElementById('postTitle').value,
             content: document.getElementById('postContent').value,
             post_type: document.getElementById('postType').value,
             post_level: level,
             channel_id: channelId || null,
-            expires_at: expiresAt || null
+            expires_at: expiresAt || null,
+            visibility: offlineAudience.visibility,
+            target_channel_ids: offlineAudience.visibility === 'communities' ? offlineAudience.ids : undefined
           });
           await window.CCQueue.registerSync();
           const hadImage = !!document.getElementById('postImage').files[0];
           showToast("You're offline. Your post was saved and will publish when you reconnect."
             + (hadImage ? ' (Image can\'t be attached to offline posts.)' : ''));
           composeForm.reset();
+          resetAudienceSelection();
           refreshPendingBadge();
         } catch (qErr) {
           alert('Could not save post offline: ' + qErr.message);
