@@ -14,28 +14,36 @@
 
 ---
 
-## Live demo
+## Live demo (use these links)
 
-| | |
-|---|---|
-| **Open the app** | **[https://teens-prominent-watch-valve.trycloudflare.com](https://teens-prominent-watch-valve.trycloudflare.com)** |
-| Health check | [https://teens-prominent-watch-valve.trycloudflare.com/api/health](https://teens-prominent-watch-valve.trycloudflare.com/api/health) |
-| Local | http://localhost:3000 |
+> **Why GitHub showed “network unreachable”:** the old Cloudflare demo URL expired. Demo links only work while this PC runs `npm start` **and** the Cloudflare tunnel. Open the links below (current working tunnel).
+
+| Purpose | Link |
+|--------|------|
+| **1. Visit the PWA (website)** | **[https://inch-courier-increases-stayed.trycloudflare.com/](https://inch-courier-increases-stayed.trycloudflare.com/)** |
+| **2. Install the app** | **[https://inch-courier-increases-stayed.trycloudflare.com/?install=1](https://inch-courier-increases-stayed.trycloudflare.com/?install=1)** |
+| Health check | [https://inch-courier-increases-stayed.trycloudflare.com/api/health](https://inch-courier-increases-stayed.trycloudflare.com/api/health) |
+| Local (this PC only) | http://localhost:3000 |
 | **GitHub repo** | [123spandu/RVCE_FORUM](https://github.com/123spandu/RVCE_FORUM) |
 | **College Forum App Report (Markdown)** | [View on GitHub](https://github.com/123spandu/RVCE_FORUM/blob/main/PROJECT_REPORT.md) |
 | **College Forum App Report (Word)** | [Download / view on GitHub](https://github.com/123spandu/RVCE_FORUM/blob/main/College_Forum_App_Report.docx) |
 
-> Public URL is a **Cloudflare tunnel** to the host PC. It stays live while the server + tunnel run. For permanent hosting, see [DEPLOY.md](./DEPLOY.md).
+### How to use on phone
 
-### Demo accounts
+1. **Visit:** open link **1** → choose Admin / Publisher / Viewer → sign in.  
+2. **Install:** after login (or from the home page), tap the **Install RVCE Connect** banner, or browser menu → **Install app** / **Add to Home Screen**.  
+3. Later open the app from your **home-screen icon** (not from an old bookmarked trycloudflare URL).
 
-| Role | Portal | Username | Password |
-|------|--------|----------|----------|
-| **Admin** | Admin Sign In | `admin` | `admin123` |
-| **Publisher** | Publisher Sign In | `hod_cse` | `rvce123` |
-| **Viewer (student)** | Viewer Sign In | `bharath_student` | `rvce123` |
+### Online vs offline (important)
 
-Change default passwords before any real / production use.
+| Situation | What works |
+|-----------|------------|
+| **First time / login / new posts** | Needs **network** (phone online + PC server + tunnel running) |
+| **After install, no network** | Cached PWA **shell** still opens from the home-screen icon (offline page / last cached feed). You cannot load a brand-new URL with zero internet. Login and live API need network again when you reconnect. |
+
+Demo accounts: `admin` / `admin123` · `hod_cse` / `rvce123` · `bharath_student` / `rvce123`
+
+For a **permanent** always-on host (Render/Railway), see [DEPLOY.md](./DEPLOY.md).
 
 ---
 

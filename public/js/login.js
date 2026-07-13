@@ -43,9 +43,12 @@
         API.setUser(data.user);
         location.replace('/app.html');
       } catch (err) {
-        let msg = err.network
-          ? 'Network error — you appear to be offline.'
-          : (err.message || 'Login failed');
+        let msg = err.message || 'Login failed';
+        if (err.network) {
+          msg = navigator.onLine
+            ? 'Cannot reach the RVCE Connect server. Start the app with npm start (or check the demo URL), then try again.'
+            : 'You appear to be offline. Check your internet connection and try again.';
+        }
         if (err.status === 401) {
           msg = 'No matching account or wrong password. Don\'t have an account? Create one.';
         }
@@ -138,9 +141,13 @@
         }
       }
     } catch (err) {
-      regErr.textContent = err.network
-        ? 'Network error — you appear to be offline.'
-        : (err.message || 'Registration failed');
+      if (err.network) {
+        regErr.textContent = navigator.onLine
+          ? 'Cannot reach the RVCE Connect server. Make sure it is running, then try again.'
+          : 'You appear to be offline. Check your internet connection and try again.';
+      } else {
+        regErr.textContent = err.message || 'Registration failed';
+      }
       regErr.classList.remove('d-none');
     }
     setRegBusy(false);

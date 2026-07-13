@@ -1,5 +1,5 @@
 // service-worker.js — CampusConnect PWA: hybrid caching + background sync + push
-const SHELL_CACHE = 'cc-shell-v18';   // App shell (HTML, CSS, JS, icons, fonts)
+const SHELL_CACHE = 'cc-shell-v20';   // App shell (HTML, CSS, JS, icons, fonts)
 const POSTS_CACHE = 'cc-posts-v2';   // API GET responses (posts/channels)
 const OFFLINE_QUEUE = 'cc-queue-v1'; // Reserved cache name (queue itself lives in IndexedDB)
 

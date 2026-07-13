@@ -39,7 +39,20 @@
   });
 
   document.addEventListener('DOMContentLoaded', function () {
-    if (isStandalone()) showInstallBanner(false);
+    if (isStandalone()) {
+      showInstallBanner(false);
+      return;
+    }
+
+    var forceInstall = false;
+    try {
+      forceInstall = new URLSearchParams(location.search).get('install') === '1';
+    } catch (_) {}
+
+    if (forceInstall) {
+      try { localStorage.removeItem(INSTALL_DISMISS_KEY); } catch (_) {}
+      showInstallBanner(true);
+    }
 
     var installBtn = document.getElementById('pwaInstallBtn');
     var dismissBtn = document.getElementById('pwaInstallDismiss');
