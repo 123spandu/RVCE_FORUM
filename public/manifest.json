@@ -23,18 +23,18 @@
   "related_applications": [],
   "screenshots": [
     {
-      "src": "/icons/ssmbl.jpg",
-      "sizes": "1080x1721",
-      "type": "image/jpeg",
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "form_factor": "narrow",
-      "label": "RVCE Connect Feed on Mobile"
+      "label": "RVCE Connect app icon"
     },
     {
-      "src": "/icons/ss.png",
-      "sizes": "1280x1080",
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "RVCE Connect Dashboard on Desktop"
+      "label": "RVCE Connect app icon"
     }
   ],
   "icons": [

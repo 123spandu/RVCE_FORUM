@@ -20,9 +20,9 @@
 
 | Purpose | Link |
 |--------|------|
-| **1. Visit the PWA (website)** | **[https://inch-courier-increases-stayed.trycloudflare.com/](https://inch-courier-increases-stayed.trycloudflare.com/)** |
-| **2. Install the app** | **[https://inch-courier-increases-stayed.trycloudflare.com/?install=1](https://inch-courier-increases-stayed.trycloudflare.com/?install=1)** |
-| Health check | [https://inch-courier-increases-stayed.trycloudflare.com/api/health](https://inch-courier-increases-stayed.trycloudflare.com/api/health) |
+| **1. Visit the PWA (website)** | **[https://features-usgs-spirituality-soccer.trycloudflare.com/](https://features-usgs-spirituality-soccer.trycloudflare.com/)** |
+| **2. Install the app** | **[https://features-usgs-spirituality-soccer.trycloudflare.com/?install=1](https://features-usgs-spirituality-soccer.trycloudflare.com/?install=1)** |
+| Health check | [https://features-usgs-spirituality-soccer.trycloudflare.com/api/health](https://features-usgs-spirituality-soccer.trycloudflare.com/api/health) |
 | Local (this PC only) | http://localhost:3000 |
 | **GitHub repo** | [123spandu/RVCE_FORUM](https://github.com/123spandu/RVCE_FORUM) |
 | **College Forum App Report (Markdown)** | [View on GitHub](https://github.com/123spandu/RVCE_FORUM/blob/main/PROJECT_REPORT.md) |
