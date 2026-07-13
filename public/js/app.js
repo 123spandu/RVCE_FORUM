@@ -302,22 +302,58 @@
 
   logoutBtn.addEventListener('click', () => { API.clearToken(); location.replace('/'); });
 
-  // --- Engagement tracking (views / CTR clicks) ---
+  // --- Engagement tracking (real views / CTR — deduped per session + server/day) ---
   const viewedPostIds = new Set();
+  const clickedPostIds = new Set();
+  try {
+    const rawV = sessionStorage.getItem('cc_viewed_posts');
+    const rawC = sessionStorage.getItem('cc_clicked_posts');
+    if (rawV) JSON.parse(rawV).forEach((id) => viewedPostIds.add(Number(id)));
+    if (rawC) JSON.parse(rawC).forEach((id) => clickedPostIds.add(Number(id)));
+  } catch (_) { /* ignore */ }
+
+  function persistTracked(key, set) {
+    try { sessionStorage.setItem(key, JSON.stringify([...set])); } catch (_) { /* ignore */ }
+  }
+
   function trackView(postId) {
     const id = Number(postId);
     if (!id || viewedPostIds.has(id)) return;
     viewedPostIds.add(id);
+    persistTracked('cc_viewed_posts', viewedPostIds);
     API.post('/api/analytics/view', { post_id: id }).catch(() => {});
   }
+
   function trackClick(postId) {
     const id = Number(postId);
-    if (!id) return;
+    if (!id || clickedPostIds.has(id)) return;
+    clickedPostIds.add(id);
+    persistTracked('cc_clicked_posts', clickedPostIds);
     API.post('/api/analytics/click', { post_id: id }).catch(() => {});
   }
 
+  let feedViewObserver = null;
+  function observeFeedViews() {
+    if (feedViewObserver) {
+      feedViewObserver.disconnect();
+      feedViewObserver = null;
+    }
+    if (!('IntersectionObserver' in window) || !feedList) return;
+    feedViewObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const id = entry.target.getAttribute('data-track-view');
+        if (id) {
+          trackView(id);
+          feedViewObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.45 });
+    feedList.querySelectorAll('[data-track-view]').forEach((el) => feedViewObserver.observe(el));
+  }
+
   // --- Publisher Analytics Dashboard ---
-  const analyticsCharts = { engagement: null, hours: null, dept: null };
+  const analyticsCharts = { engagement: null, hours: null, dept: null, types: null, communities: null };
 
   function destroyAnalyticsCharts() {
     Object.keys(analyticsCharts).forEach(k => {
@@ -335,14 +371,24 @@
     return getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#64766d';
   }
 
+  const CHART_COLORS = ['#0f7a4d', '#14b8a6', '#0ea5e9', '#f59e0b', '#f43f5e', '#8b5cf6', '#64748b', '#84cc16'];
+
   function renderHeatmap(cells) {
     const wrap = document.getElementById('analyticsHeatmap');
+    const empty = document.getElementById('heatmapEmpty');
     if (!wrap) return;
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const hours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
-    const map = new Map(cells.map(c => [`${c.dow}-${c.hour}`, c.count]));
+    const map = new Map((cells || []).map(c => [`${c.dow}-${c.hour}`, c.count]));
     let max = 1;
-    cells.forEach(c => { if (hours.includes(c.hour) && c.count > max) max = c.count; });
+    let any = 0;
+    (cells || []).forEach(c => {
+      if (hours.includes(c.hour) && c.count > 0) {
+        any += c.count;
+        if (c.count > max) max = c.count;
+      }
+    });
+    if (empty) empty.classList.toggle('d-none', any > 0);
 
     let html = '<div class="hm-corner"></div>';
     hours.forEach(h => { html += `<div class="hm-hour">${h}</div>`; });
@@ -351,7 +397,7 @@
       hours.forEach(h => {
         const n = map.get(`${dow}-${h}`) || 0;
         const intensity = n === 0 ? 0 : 0.15 + (n / max) * 0.85;
-        html += `<div class="hm-cell" style="--hm:${intensity.toFixed(2)}" title="${day} ${h}:00 — ${n} engagements"></div>`;
+        html += `<div class="hm-cell" style="--hm:${intensity.toFixed(2)}" title="${day} ${h}:00 IST — ${n} engagements"></div>`;
       });
     });
     wrap.innerHTML = html;
@@ -360,26 +406,43 @@
   async function loadPublisherAnalytics() {
     const kpi = document.getElementById('pubAnalyticsKpis');
     const scopeLabel = document.getElementById('analyticsScopeLabel');
+    const eyebrow = document.getElementById('analyticsEyebrow');
     const peakLabel = document.getElementById('peakHourLabel');
+    const insightsEl = document.getElementById('analyticsInsights');
     const tbody = document.querySelector('#analyticsTopPostsTable tbody');
+    const deptEmpty = document.getElementById('chartDeptEmpty');
     if (kpi) kpi.innerHTML = '<div class="col-12 text-muted small">Loading analytics…</div>';
 
     try {
       const data = await API.get('/api/analytics/publisher');
       const t = data.totals || {};
+      if (eyebrow) {
+        eyebrow.textContent = data.scope === 'campus' ? 'Campus insights' : 'Publisher insights';
+      }
       if (scopeLabel) {
         scopeLabel.textContent = data.scope === 'campus'
-          ? 'Campus-wide publisher metrics — views, engagement, reach, and peak activity.'
-          : 'Your posts and communities — views, engagement, reach, and peak activity.';
+          ? 'Live campus metrics (IST). Numbers come from real student views, likes, bookmarks, and opens — not sample data.'
+          : 'Live metrics for your notices (IST). Based on real student engagement — not sample data.';
+      }
+
+      if (insightsEl) {
+        const tips = data.insights || [];
+        if (tips.length) {
+          insightsEl.classList.remove('d-none');
+          insightsEl.innerHTML = `<div class="fw-700 small mb-1"><i class="bi bi-lightbulb me-1 text-warning"></i>What the numbers mean</div><ul class="small text-muted">${tips.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`;
+        } else {
+          insightsEl.classList.add('d-none');
+          insightsEl.innerHTML = '';
+        }
       }
 
       if (kpi) {
         const cards = [
-          { label: 'Views', value: t.views, sub: `${t.unique_views || 0} unique`, icon: 'bi-eye' },
+          { label: 'Views', value: t.views, sub: `${t.unique_views || 0} unique readers`, icon: 'bi-eye' },
           { label: 'Likes', value: t.likes, icon: 'bi-heart' },
           { label: 'Bookmarks', value: t.bookmarks, icon: 'bi-bookmark' },
           { label: 'Subscribers', value: t.subscribers, icon: 'bi-people' },
-          { label: 'CTR', value: `${t.ctr || 0}%`, sub: `${t.clicks || 0} clicks`, icon: 'bi-cursor' },
+          { label: 'CTR', value: `${t.ctr || 0}%`, sub: `${t.clicks || 0} opens`, icon: 'bi-cursor' },
           { label: 'Posts', value: t.posts, icon: 'bi-file-earmark-text' }
         ];
         kpi.innerHTML = cards.map(c => `
@@ -396,130 +459,216 @@
       }
 
       if (peakLabel && data.most_active_time) {
-        peakLabel.innerHTML = `Peak hour: <strong>${escapeHtml(data.most_active_time.peak_label)}</strong>`;
+        const mat = data.most_active_time;
+        peakLabel.innerHTML = mat.peak_hour == null
+          ? `<span class="text-muted">${escapeHtml(mat.peak_label || 'Not enough data')}</span>`
+          : `Peak hour: <strong>${escapeHtml(mat.peak_label)}</strong> <span class="text-muted">(${mat.peak_count} events)</span>`;
       }
 
       destroyAnalyticsCharts();
+      const muted = chartMutedColor();
+      const days = (data.daily_engagement || []).map(r => String(r.day).slice(0, 10));
+      const hasEngagement = (data.totals?.engagement_events || 0) > 0
+        || (data.daily_engagement || []).some(r =>
+          (r.views || 0) + (r.likes || 0) + (r.bookmarks || 0) + (r.clicks || 0) > 0
+        );
+
+      function makeChart(key, canvas, config) {
+        if (!canvas) return;
+        try {
+          analyticsCharts[key] = new Chart(canvas, config);
+        } catch (err) {
+          console.warn('Chart render failed:', key, err);
+        }
+      }
+
       if (typeof Chart === 'undefined') {
         console.warn('Chart.js not loaded');
       } else {
-        const text = chartTextColor();
-        const muted = chartMutedColor();
+        makeChart('engagement', document.getElementById('chartEngagement'), {
+          type: 'line',
+          data: {
+            labels: days.map(d => d.slice(5)),
+            datasets: [
+              {
+                label: 'Views',
+                data: (data.daily_engagement || []).map(r => r.views || 0),
+                borderColor: '#0f7a4d',
+                backgroundColor: 'rgba(15,122,77,0.12)',
+                fill: true,
+                tension: 0.35
+              },
+              {
+                label: 'Likes',
+                data: (data.daily_engagement || []).map(r => r.likes || 0),
+                borderColor: '#f43f5e',
+                backgroundColor: 'transparent',
+                tension: 0.35
+              },
+              {
+                label: 'Bookmarks',
+                data: (data.daily_engagement || []).map(r => r.bookmarks || 0),
+                borderColor: '#f59e0b',
+                backgroundColor: 'transparent',
+                tension: 0.35
+              },
+              {
+                label: 'Opens',
+                data: (data.daily_engagement || []).map(r => r.clicks || 0),
+                borderColor: '#14b8a6',
+                backgroundColor: 'transparent',
+                tension: 0.35
+              },
+              {
+                label: 'Posts published',
+                data: (data.daily_engagement || []).map(r => r.posts || 0),
+                borderColor: '#0ea5e9',
+                borderDash: [5, 4],
+                backgroundColor: 'transparent',
+                tension: 0.25
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { labels: { color: muted } }
+            },
+            scales: {
+              x: { ticks: { color: muted }, grid: { color: 'rgba(100,118,109,0.12)' } },
+              y: { beginAtZero: true, ticks: { color: muted, precision: 0 }, grid: { color: 'rgba(100,118,109,0.12)' } }
+            }
+          }
+        });
 
-        // Fill 14-day series
-        const days = [];
-        for (let i = 13; i >= 0; i--) {
-          const d = new Date();
-          d.setHours(0, 0, 0, 0);
-          d.setDate(d.getDate() - i);
-          days.push(d.toISOString().slice(0, 10));
+        const hours = (data.most_active_time?.by_hour || []).filter(h => h.hour >= 7 && h.hour <= 22);
+        const peakH = data.most_active_time?.peak_hour;
+        makeChart('hours', document.getElementById('chartActiveHours'), {
+          type: 'bar',
+          data: {
+            labels: hours.map(h => `${h.hour}`),
+            datasets: [{
+              label: 'Engagement',
+              data: hours.map(h => h.count),
+              backgroundColor: hours.map(h =>
+                peakH != null && h.hour === peakH ? '#0f7a4d' : 'rgba(20,184,166,0.45)'
+              ),
+              borderRadius: 6
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { title: { display: true, text: 'Hour (IST)', color: muted }, ticks: { color: muted }, grid: { display: false } },
+              y: { beginAtZero: true, ticks: { color: muted, precision: 0 }, grid: { color: 'rgba(100,118,109,0.12)' } }
+            }
+          }
+        });
+
+        const types = data.posts_by_type || [];
+        makeChart('types', document.getElementById('chartPostTypes'), {
+          type: 'bar',
+          data: {
+            labels: types.length ? types.map(x => x.post_type) : ['No posts yet'],
+            datasets: [{
+              label: 'Notices',
+              data: types.length ? types.map(x => x.count) : [0],
+              backgroundColor: types.length
+                ? types.map((_, i) => CHART_COLORS[i % CHART_COLORS.length])
+                : ['#cbd5e1'],
+              borderRadius: 6
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { beginAtZero: true, ticks: { color: muted, precision: 0 }, grid: { color: 'rgba(100,118,109,0.12)' } },
+              y: { ticks: { color: muted }, grid: { display: false } }
+            }
+          }
+        });
+
+        const depts = data.department_reach || [];
+        if (deptEmpty) {
+          deptEmpty.classList.toggle('d-none', depts.length > 0);
+          deptEmpty.textContent = depts.length
+            ? ''
+            : 'No department reach yet. When students from different branches view or like notices, they appear here.';
         }
-        const byDay = new Map((data.daily_engagement || []).map(r => {
-          const key = typeof r.day === 'string' ? r.day.slice(0, 10) : new Date(r.day).toISOString().slice(0, 10);
-          return [key, r];
-        }));
+        makeChart('dept', document.getElementById('chartDeptReach'), {
+          type: 'bar',
+          data: {
+            labels: depts.length ? depts.map(d => d.name.replace(/ and /g, ' & ')) : ['Waiting for engagement'],
+            datasets: [{
+              label: 'Unique students',
+              data: depts.length ? depts.map(d => d.reach) : [0],
+              backgroundColor: depts.length
+                ? depts.map((_, i) => CHART_COLORS[i % CHART_COLORS.length])
+                : ['#cbd5e1'],
+              borderRadius: 6
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { beginAtZero: true, ticks: { color: muted, precision: 0 }, grid: { color: 'rgba(100,118,109,0.12)' } },
+              y: { ticks: { color: muted }, grid: { display: false } }
+            }
+          }
+        });
 
-        const engCanvas = document.getElementById('chartEngagement');
-        if (engCanvas) {
-          analyticsCharts.engagement = new Chart(engCanvas, {
-            type: 'line',
-            data: {
-              labels: days.map(d => d.slice(5)),
-              datasets: [
-                {
-                  label: 'Views',
-                  data: days.map(d => (byDay.get(d) || {}).views || 0),
-                  borderColor: '#0f7a4d',
-                  backgroundColor: 'rgba(15,122,77,0.12)',
-                  fill: true,
-                  tension: 0.35
-                },
-                  {
-                  label: 'Likes',
-                  data: days.map(d => (byDay.get(d) || {}).likes || 0),
-                  borderColor: '#f43f5e',
-                  backgroundColor: 'transparent',
-                  tension: 0.35
-                },
-                {
-                  label: 'Bookmarks',
-                  data: days.map(d => (byDay.get(d) || {}).bookmarks || 0),
-                  borderColor: '#f59e0b',
-                  backgroundColor: 'transparent',
-                  tension: 0.35
-                },
-                {
-                  label: 'Clicks',
-                  data: days.map(d => (byDay.get(d) || {}).clicks || 0),
-                  borderColor: '#14b8a6',
-                  backgroundColor: 'transparent',
-                  tension: 0.35
+        const comms = data.posts_by_community || [];
+        makeChart('communities', document.getElementById('chartCommunities'), {
+          type: 'doughnut',
+          data: {
+            labels: comms.length ? comms.map(c => c.name) : ['No communities'],
+            datasets: [{
+              data: comms.length ? comms.map(c => c.count) : [1],
+              backgroundColor: comms.length
+                ? comms.map((_, i) => CHART_COLORS[i % CHART_COLORS.length])
+                : ['#e2e8f0']
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom', labels: { color: muted, boxWidth: 12 } },
+              tooltip: {
+                callbacks: {
+                  label(ctx) {
+                    const n = ctx.raw || 0;
+                    return ` ${ctx.label}: ${n} notice${n === 1 ? '' : 's'}`;
+                  }
                 }
-              ]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { labels: { color: muted } } },
-              scales: {
-                x: { ticks: { color: muted }, grid: { color: 'rgba(100,118,109,0.12)' } },
-                y: { beginAtZero: true, ticks: { color: muted }, grid: { color: 'rgba(100,118,109,0.12)' } }
               }
             }
-          });
-        }
+          }
+        });
 
-        const hourCanvas = document.getElementById('chartActiveHours');
-        if (hourCanvas) {
-          const hours = (data.most_active_time?.by_hour || []).filter(h => h.hour >= 7 && h.hour <= 22);
-          analyticsCharts.hours = new Chart(hourCanvas, {
-            type: 'bar',
-            data: {
-              labels: hours.map(h => `${h.hour}`),
-              datasets: [{
-                label: 'Engagement',
-                data: hours.map(h => h.count),
-                backgroundColor: hours.map(h =>
-                  h.hour === data.most_active_time.peak_hour ? '#0f7a4d' : 'rgba(20,184,166,0.45)'
-                ),
-                borderRadius: 6
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { display: false } },
-              scales: {
-                x: { ticks: { color: muted }, grid: { display: false } },
-                y: { beginAtZero: true, ticks: { color: muted }, grid: { color: 'rgba(100,118,109,0.12)' } }
-              }
-            }
+        // Charts created while layout settles — force a resize so canvases aren't blank.
+        requestAnimationFrame(() => {
+          Object.values(analyticsCharts).forEach(ch => {
+            try { if (ch) ch.resize(); } catch (_) { /* ignore */ }
           });
-        }
+        });
+      }
 
-        const deptCanvas = document.getElementById('chartDeptReach');
-        if (deptCanvas) {
-          const depts = data.department_reach || [];
-          analyticsCharts.dept = new Chart(deptCanvas, {
-            type: 'doughnut',
-            data: {
-              labels: depts.length ? depts.map(d => d.name) : ['No reach yet'],
-              datasets: [{
-                data: depts.length ? depts.map(d => d.reach) : [1],
-                backgroundColor: depts.length
-                  ? ['#0f7a4d', '#14b8a6', '#0ea5e9', '#f59e0b', '#f43f5e', '#8b5cf6', '#64748b']
-                  : ['#e2e8f0']
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: { position: 'bottom', labels: { color: muted, boxWidth: 12 } }
-              }
-            }
-          });
-        }
+      const engEmpty = document.getElementById('chartEngagementEmpty');
+      if (engEmpty) {
+        engEmpty.classList.toggle('d-none', hasEngagement);
+        engEmpty.textContent = hasEngagement
+          ? ''
+          : 'Engagement lines stay flat until students open the Feed (views) or like/bookmark notices. “Posts published” still shows publishing activity.';
       }
 
       renderHeatmap(data.heatmap || []);
@@ -664,11 +813,10 @@
       return;
     }
     feedList.innerHTML = posts.map(p => postCardHtml(p)).join('');
-    posts.forEach(p => trackView(p.id));
+    observeFeedViews();
     // Wire up events
     feedList.querySelectorAll('.read-more').forEach(btn => {
       btn.onclick = () => {
-        trackClick(btn.dataset.id);
         showPostModal(posts.find(x => x.id == btn.dataset.id));
       };
     });
@@ -708,7 +856,7 @@
 
     return `
       <div class="col fade-in">
-        <article class="post-card p-4 h-100 d-flex flex-column">
+        <article class="post-card p-4 h-100 d-flex flex-column" data-post-id="${p.id}" data-track-view="${p.id}">
           <div class="post-header">
             <div class="post-publisher-avatar">${escapeHtml(avatar)}</div>
             <div>
@@ -1031,6 +1179,10 @@
       }
       const imgFile = document.getElementById('postImage').files[0];
       if (imgFile) fd.append('image', imgFile);
+      else {
+        const sharedUrl = (document.getElementById('postSharedImageUrl') || {}).value;
+        if (sharedUrl) fd.append('image_url', sharedUrl);
+      }
       return fd;
     };
 
@@ -1474,12 +1626,51 @@
   }
 
   // Campus-wide push: register endpoint when permission already granted;
-  // otherwise show a one-time banner so students/publishers can opt in.
+  // otherwise show banner + keep nav bell so students can always opt in.
   (async function initCampusPush() {
     const banner = document.getElementById('pushEnableBanner');
     const enableBtn = document.getElementById('pushEnableBtn');
     const dismissBtn = document.getElementById('pushEnableDismiss');
+    const navNotifyBtn = document.getElementById('navNotifyBtn');
     const dismissedKey = 'cc_push_banner_dismissed';
+
+    async function enablePushFromUi() {
+      try {
+        await ensurePushSubscription();
+        if (banner) banner.classList.add('d-none');
+        localStorage.removeItem(dismissedKey);
+        if (navNotifyBtn) {
+          navNotifyBtn.classList.add('text-success');
+          navNotifyBtn.title = 'Notifications enabled';
+        }
+        showToast('Notifications enabled — you will get alerts on new posts.');
+      } catch (e) {
+        showPushHelp(e.message);
+      }
+    }
+
+    if (navNotifyBtn) {
+      navNotifyBtn.addEventListener('click', () => {
+        if (!window.isSecureContext) {
+          showPushHelp('insecure');
+          return;
+        }
+        if (!('Notification' in window) || !('PushManager' in window)) {
+          showPushHelp('unsupported');
+          return;
+        }
+        if (Notification.permission === 'granted') {
+          enablePushFromUi();
+          return;
+        }
+        if (Notification.permission === 'denied') {
+          showPushHelp('denied');
+          return;
+        }
+        if (banner) banner.classList.remove('d-none');
+        enablePushFromUi();
+      });
+    }
 
     if (!window.isSecureContext || !('Notification' in window) || !('PushManager' in window)) {
       return;
@@ -1488,6 +1679,10 @@
     try {
       if (Notification.permission === 'granted') {
         await ensurePushSubscription();
+        if (navNotifyBtn) {
+          navNotifyBtn.classList.add('text-success');
+          navNotifyBtn.title = 'Notifications enabled';
+        }
         return;
       }
     } catch (e) {
@@ -1495,27 +1690,19 @@
     }
 
     if (Notification.permission !== 'default') return;
-    if (localStorage.getItem(dismissedKey) === '1') return;
-    if (!banner) return;
 
-    banner.classList.remove('d-none');
+    // Re-show the banner (clear old dismiss) so Enable/Install aren't "missing"
+    try { localStorage.removeItem(dismissedKey); } catch (_) {}
+    if (banner) banner.classList.remove('d-none');
+
     if (dismissBtn) {
       dismissBtn.addEventListener('click', () => {
-        banner.classList.add('d-none');
+        if (banner) banner.classList.add('d-none');
         localStorage.setItem(dismissedKey, '1');
       });
     }
     if (enableBtn) {
-      enableBtn.addEventListener('click', async () => {
-        try {
-          await ensurePushSubscription();
-          banner.classList.add('d-none');
-          localStorage.removeItem(dismissedKey);
-          showToast('Notifications enabled — you will get alerts on new posts.');
-        } catch (e) {
-          showPushHelp(e.message);
-        }
-      });
+      enableBtn.addEventListener('click', () => enablePushFromUi());
     }
   })();
 
@@ -1777,6 +1964,75 @@
     if (memberSearch) filterUsers(memberSearch.value);
   };
 
+  function clearSharedImagePreview() {
+    const hidden = document.getElementById('postSharedImageUrl');
+    const wrap = document.getElementById('sharedImagePreview');
+    const img = document.getElementById('sharedImagePreviewImg');
+    if (hidden) hidden.value = '';
+    if (img) img.removeAttribute('src');
+    if (wrap) wrap.classList.add('d-none');
+  }
+
+  function setSharedImagePreview(url) {
+    const hidden = document.getElementById('postSharedImageUrl');
+    const wrap = document.getElementById('sharedImagePreview');
+    const img = document.getElementById('sharedImagePreviewImg');
+    if (!url || !hidden || !wrap || !img) return;
+    hidden.value = url;
+    img.src = url;
+    wrap.classList.remove('d-none');
+  }
+
+  async function attachFileToCompose(file) {
+    if (!file || !file.type || !file.type.startsWith('image/')) return false;
+    const input = document.getElementById('postImage');
+    if (!input) return false;
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      clearSharedImagePreview();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function parseDeepPostId(raw) {
+    if (raw == null || raw === '') return null;
+    const s = String(raw).trim();
+    if (/^\d+$/.test(s)) return Number(s);
+    // Protocol handler may pass web+rvce:123 or web+rvce://123
+    const proto = s.match(/^web\+rvce:(?:\/\/)?(\d+)/i);
+    if (proto) return Number(proto[1]);
+    const nested = s.match(/[?&]post=(\d+)/i);
+    if (nested) return Number(nested[1]);
+    const digits = s.match(/(\d{1,10})\s*$/);
+    if (digits) return Number(digits[1]);
+    return null;
+  }
+
+  async function openPostById(postId) {
+    try {
+      const data = await API.get('/api/posts/' + postId);
+      if (data && data.post) {
+        activateTab('feed');
+        showPostModal(data.post);
+        return;
+      }
+    } catch (e) {
+      console.warn('Deep-link post fetch failed:', e.message || e);
+    }
+    // Fallback: load feed and find the card
+    activateTab('feed');
+    try {
+      await loadFeed();
+      const card = document.querySelector(`[data-post-id="${postId}"]`);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      else showToast('Post #' + postId + ' could not be opened (may be expired or private).');
+    } catch (_) {}
+  }
+
   // --- Modal & Helpers ---
   function showPostModal(p) {
     if (p && p.id) trackClick(p.id);
@@ -1993,11 +2249,11 @@
   const sharedText = bootParams.get('text') || bootParams.get('body');
   const sharedUrl = bootParams.get('url');
   const sharedImage = bootParams.get('image');
+  const deepPostId = parseDeepPostId(bootParams.get('post'));
   const isShareLaunch = bootParams.get('share') === '1' || !!(sharedTitle || sharedText || sharedUrl || sharedImage);
 
   if (isShareLaunch && (user.role === 'publisher' || user.role === 'admin')) {
     activateTab('compose');
-    // Prefill compose from OS share / share_target
     const titleEl = document.getElementById('postTitle');
     const bodyEl = document.getElementById('postContent');
     if (titleEl && sharedTitle) titleEl.value = sharedTitle;
@@ -2008,12 +2264,11 @@
       if (parts.length) bodyEl.value = parts.join('\n\n');
     }
     if (sharedImage) {
-      showToast('Shared image received — attach it from uploads if needed, or paste the notice text and publish.');
-      // Image from share is on server; show hint in content
-      if (bodyEl && sharedImage && !bodyEl.value.includes(sharedImage)) {
-        bodyEl.value = (bodyEl.value ? bodyEl.value + '\n\n' : '') + `(Shared media: ${sharedImage})`;
-      }
+      setSharedImagePreview(sharedImage);
+      showToast('Shared image attached — ready to publish.');
     }
+  } else if (deepPostId) {
+    openPostById(deepPostId);
   } else if (bootTab === 'compose' || user.role === 'publisher') {
     if (user.role === 'publisher') sessionStorage.setItem('publisher_default_tab', 'compose');
     activateTab('compose');
@@ -2028,6 +2283,32 @@
   if (bootParams.get('sync') === 'actions' && window.CCEngage) {
     window.CCEngage.syncAll({ token }).catch(() => {});
   }
+
+  // File Handling API (manifest file_handlers) — open shared images into Compose
+  if ('launchQueue' in window && window.launchQueue && typeof window.launchQueue.setConsumer === 'function') {
+    window.launchQueue.setConsumer(async (launchParams) => {
+      if (!launchParams || !launchParams.files || !launchParams.files.length) return;
+      if (!(user.role === 'publisher' || user.role === 'admin')) {
+        showToast('Sign in as a publisher to attach shared files.');
+        return;
+      }
+      activateTab('compose');
+      try {
+        const handle = launchParams.files[0];
+        const file = await handle.getFile();
+        const ok = await attachFileToCompose(file);
+        if (ok) showToast('File attached to compose.');
+        else showToast('Could not attach that file type.');
+      } catch (e) {
+        console.warn('launchQueue file attach failed:', e);
+      }
+    });
+  }
+
+  if (composeForm) {
+    composeForm.addEventListener('reset', () => clearSharedImagePreview());
+  }
+
   // Initial drafts panel + badge
   refreshPendingBadge();
   renderOfflineDrafts();

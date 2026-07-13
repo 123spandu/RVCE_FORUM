@@ -95,9 +95,15 @@ app.post('/share', (req, res) => {
   });
 });
 
-// SPA fallback - send the main page for any non-API path
+// SPA fallback — never replace missing images/static assets with index.html
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
+  if (req.path.startsWith('/uploads')) {
+    return res.status(404).type('text/plain').send('Upload not found');
+  }
+  if (/\.(png|jpe?g|gif|webp|svg|ico|css|js|map|json|woff2?|txt|webmanifest)$/i.test(req.path)) {
+    return res.status(404).type('text/plain').send('Not found');
+  }
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -257,7 +263,7 @@ async function runMigrations() {
     console.log('✔ Seeded sample assignments for Personalized Dashboard');
   }
 
-  // Publisher Analytics: view + click event tables
+  // Publisher Analytics: view + click event tables (real tracking only — no fake RAND seeds)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS post_views (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -267,7 +273,8 @@ async function runMigrations() {
       FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
       INDEX idx_view_post_time (post_id, created_at),
-      INDEX idx_view_time (created_at)
+      INDEX idx_view_time (created_at),
+      INDEX idx_view_user_post_day (post_id, user_id, created_at)
     ) ENGINE=InnoDB
   `);
   await pool.query(`
@@ -279,38 +286,29 @@ async function runMigrations() {
       FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
       INDEX idx_click_post_time (post_id, created_at),
-      INDEX idx_click_time (created_at)
+      INDEX idx_click_time (created_at),
+      INDEX idx_click_user_post_day (post_id, user_id, created_at)
     ) ENGINE=InnoDB
   `);
 
-  const [viewCount] = await pool.query('SELECT COUNT(*) AS n FROM post_views');
-  if (Number(viewCount[0].n) === 0) {
-    // Seed realistic demo engagement across hours/days for charts + heatmaps
-    await pool.query(`
-      INSERT INTO post_views (post_id, user_id, created_at)
-      SELECT p.id,
-             CASE WHEN RAND() < 0.85 THEN ELT(1 + FLOOR(RAND() * 3), 5, 6, 7) ELSE NULL END,
-             DATE_SUB(NOW(), INTERVAL FLOOR(RAND() * 14) DAY)
-               + INTERVAL FLOOR(RAND() * 24) HOUR
-               + INTERVAL FLOOR(RAND() * 60) MINUTE
-        FROM posts p
-        CROSS JOIN (SELECT 0 n UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) x
-        CROSS JOIN (SELECT 0 m UNION SELECT 1 UNION SELECT 2) y
-       WHERE p.is_published = TRUE
-    `);
-    await pool.query(`
-      INSERT INTO post_clicks (post_id, user_id, created_at)
-      SELECT p.id,
-             ELT(1 + FLOOR(RAND() * 3), 5, 6, 7),
-             DATE_SUB(NOW(), INTERVAL FLOOR(RAND() * 14) DAY)
-               + INTERVAL (8 + FLOOR(RAND() * 12)) HOUR
-               + INTERVAL FLOOR(RAND() * 60) MINUTE
-        FROM posts p
-        CROSS JOIN (SELECT 0 n UNION SELECT 1 UNION SELECT 2) x
-       WHERE p.is_published = TRUE
-         AND RAND() < 0.55
-    `);
-    console.log('✔ Seeded sample post views/clicks for Analytics Dashboard');
+  // One-time purge of demo RAND()-seeded analytics so dashboards show real activity only
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_meta (
+      meta_key VARCHAR(64) PRIMARY KEY,
+      meta_value VARCHAR(255) NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB
+  `);
+  const [cleaned] = await pool.query(
+    "SELECT meta_value FROM app_meta WHERE meta_key = 'analytics_real_only_v1' LIMIT 1"
+  );
+  if (!cleaned.length) {
+    await pool.query('DELETE FROM post_views');
+    await pool.query('DELETE FROM post_clicks');
+    await pool.query(
+      "INSERT INTO app_meta (meta_key, meta_value) VALUES ('analytics_real_only_v1', '1')"
+    );
+    console.log('✔ Cleared demo/random analytics rows — tracking live engagement only');
   }
 
   // Students should always follow their department notice board

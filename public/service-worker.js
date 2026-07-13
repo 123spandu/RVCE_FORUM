@@ -1,7 +1,13 @@
 // service-worker.js — CampusConnect PWA: hybrid caching + background sync + push
-const SHELL_CACHE = 'cc-shell-v22';   // App shell (HTML, CSS, JS, icons, fonts)
-const POSTS_CACHE = 'cc-posts-v2';   // API GET responses (posts/channels)
+const SHELL_CACHE = 'cc-shell-v27';   // App shell (HTML, CSS, JS, icons, fonts)
+const POSTS_CACHE = 'cc-posts-v3';   // API GET responses (posts/channels)
 const OFFLINE_QUEUE = 'cc-queue-v1'; // Reserved cache name (queue itself lives in IndexedDB)
+
+const CDN_SHELL = [
+  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
+  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css',
+  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js'
+];
 
 const SHELL_ASSETS = [
   '/', '/index.html', '/app.html', '/offline.html',
@@ -10,9 +16,7 @@ const SHELL_ASSETS = [
   '/js/app.js', '/js/api.js', '/js/login.js', '/js/sw-register.js', '/js/theme.js', '/js/pwa-extras.js',
   '/manifest.json',
   '/icons/icon-192.png', '/icons/icon-512.png',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js'
+  ...CDN_SHELL
 ];
 
 // ---- Install: pre-cache the app shell (Cache First targets) ----
@@ -27,13 +31,13 @@ self.addEventListener('install', event => {
   );
 });
 
-// ---- Activate: drop stale caches ----
+// ---- Activate: drop ALL stale caches (clears poisoned image/HTML entries) ----
 self.addEventListener('activate', event => {
+  const keep = [SHELL_CACHE, POSTS_CACHE, OFFLINE_QUEUE];
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
-        keys.filter(k => ![SHELL_CACHE, POSTS_CACHE, OFFLINE_QUEUE].includes(k))
-          .map(k => caches.delete(k))
+        keys.filter(k => !keep.includes(k)).map(k => caches.delete(k))
       )
     ).then(() => self.clients.claim())
   );
@@ -54,6 +58,22 @@ self.addEventListener('fetch', event => {
   // Sync (asks open clients to flush) and/or the page's own reconnect flush.
   if (req.method !== 'GET') return; // writes: network only (page handles offline queueing)
 
+  // CRITICAL: never intercept /uploads — a prior SW cached HTML 404s as "images"
+  // and broke every poster in the feed. Let the browser load them from the network.
+  if (url.pathname.startsWith('/uploads/')) return;
+
+  // Known CDN shell assets: serve from cache so offline UI keeps Bootstrap styles/scripts.
+  if (url.origin !== self.location.origin) {
+    const isShellCdn = CDN_SHELL.some(u => url.href === u || url.href.startsWith(u.split('?')[0]));
+    const isBootstrapIconFont = url.hostname === 'cdn.jsdelivr.net' && url.pathname.includes('bootstrap-icons');
+    if (isShellCdn || isBootstrapIconFont) {
+      event.respondWith(cacheFirst(req, SHELL_CACHE));
+      return;
+    }
+    // Other cross-origin (placeholders, etc.): let the browser handle directly.
+    return;
+  }
+
   // Posts & channels feeds: Network First, fall back to cache.
   if (url.pathname.startsWith('/api/posts') || url.pathname.startsWith('/api/channels')) {
     event.respondWith(networkFirst(req, POSTS_CACHE));
@@ -63,17 +83,43 @@ self.addEventListener('fetch', event => {
   // All other API GETs: network only (do not cache mutable/sensitive data).
   if (url.pathname.startsWith('/api/')) return;
 
-  // Navigation requests: serve cached shell, else offline page.
+  // App icons (small, static): cache-first
+  if (url.pathname.startsWith('/icons/') || /\.(png|jpe?g|gif|webp|svg|ico)$/i.test(url.pathname)) {
+    event.respondWith(cacheFirst(req, SHELL_CACHE));
+    return;
+  }
+
+  // HTML/JS/CSS must be network-first so Analytics/UI updates aren't stuck on a stale SW cache.
+  if (
+    url.pathname.endsWith('.html') ||
+    url.pathname.startsWith('/js/') ||
+    url.pathname.startsWith('/css/') ||
+    url.pathname === '/manifest.json' ||
+    url.pathname === '/service-worker.js'
+  ) {
+    event.respondWith(networkFirst(req, SHELL_CACHE));
+    return;
+  }
+
+  // Navigation requests: network first, else cached shell / offline page.
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req).catch(() =>
-        caches.match(req).then(r => r || caches.match('/offline.html'))
-      )
+      fetch(req)
+        .then(res => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(SHELL_CACHE).then(c => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() =>
+          caches.match(req).then(r => r || caches.match('/offline.html'))
+        )
     );
     return;
   }
 
-  // Everything else (shell + CDN): Cache First, refresh in background.
+  // Everything else (remaining same-origin assets): Cache First, refresh in background.
   event.respondWith(cacheFirst(req, SHELL_CACHE));
 });
 
@@ -179,6 +225,22 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   const postId = event.notification.data && event.notification.data.postId;
-  const target = '/app.html' + (postId ? ('?post=' + postId) : '');
+  const target = '/app.html' + (postId ? ('?post=' + encodeURIComponent(postId)) : '');
   event.waitUntil(self.clients.openWindow(target));
+});
+
+// Page → SW messages (role hint is advisory only; unused by fetch routing today)
+self.addEventListener('message', event => {
+  const data = event.data || {};
+  if (data.type === 'SET_ROLE') {
+    self.__ccRole = data.role || null;
+  }
+  if (data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+  if (data.type === 'CLEAR_CACHES') {
+    event.waitUntil(
+      caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))))
+    );
+  }
 });

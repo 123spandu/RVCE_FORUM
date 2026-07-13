@@ -526,6 +526,18 @@ button.dash-item:hover { background: var(--surface-2); border-radius: 10px; padd
   height: 220px;
   width: 100%;
 }
+.analytics-insights {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--cc-radius-md);
+  padding: 0.85rem 1rem;
+}
+.analytics-insights ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.analytics-insights li { margin-bottom: 0.25rem; }
+.analytics-empty { line-height: 1.4; }
 .analytics-heatmap {
   display: grid;
   grid-template-columns: 42px repeat(14, minmax(0, 1fr));

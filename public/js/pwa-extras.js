@@ -24,53 +24,71 @@
     el.classList.toggle('d-none', !show);
   }
 
+  function syncInstallNav() {
+    var nav = document.getElementById('navInstallBtn');
+    if (!nav) return;
+    nav.classList.toggle('d-none', isStandalone());
+  }
+
+  async function runInstallPrompt() {
+    if (isStandalone()) {
+      alert('RVCE Connect is already installed on this device.');
+      return;
+    }
+    if (!deferredPrompt) {
+      alert('To install: use your browser menu → “Add to Home Screen” / “Install app”.\n\nTip: open over HTTPS (or localhost), then use Install in the address bar.');
+      return;
+    }
+    deferredPrompt.prompt();
+    try {
+      await deferredPrompt.userChoice;
+    } catch (_) {}
+    deferredPrompt = null;
+    showInstallBanner(false);
+  }
+
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
     deferredPrompt = e;
     if (!isStandalone() && !recentlyDismissed()) {
       showInstallBanner(true);
     }
+    syncInstallNav();
   });
 
   window.addEventListener('appinstalled', function () {
     deferredPrompt = null;
     showInstallBanner(false);
+    syncInstallNav();
     try { localStorage.removeItem(INSTALL_DISMISS_KEY); } catch (_) {}
   });
 
   document.addEventListener('DOMContentLoaded', function () {
-    if (isStandalone()) {
-      showInstallBanner(false);
-      return;
-    }
+    syncInstallNav();
 
     var forceInstall = false;
     try {
       forceInstall = new URLSearchParams(location.search).get('install') === '1';
     } catch (_) {}
 
-    if (forceInstall) {
-      try { localStorage.removeItem(INSTALL_DISMISS_KEY); } catch (_) {}
+    if (isStandalone()) {
+      showInstallBanner(false);
+    } else if (forceInstall || (!recentlyDismissed() && deferredPrompt)) {
+      if (forceInstall) {
+        try { localStorage.removeItem(INSTALL_DISMISS_KEY); } catch (_) {}
+      }
       showInstallBanner(true);
     }
 
     var installBtn = document.getElementById('pwaInstallBtn');
     var dismissBtn = document.getElementById('pwaInstallDismiss');
+    var navInstallBtn = document.getElementById('navInstallBtn');
 
     if (installBtn) {
-      installBtn.addEventListener('click', async function () {
-        if (!deferredPrompt) {
-          // iOS / browsers without beforeinstallprompt — show tip
-          alert('To install: use your browser menu → “Add to Home Screen” / “Install app”.');
-          return;
-        }
-        deferredPrompt.prompt();
-        try {
-          await deferredPrompt.userChoice;
-        } catch (_) {}
-        deferredPrompt = null;
-        showInstallBanner(false);
-      });
+      installBtn.addEventListener('click', function () { runInstallPrompt(); });
+    }
+    if (navInstallBtn) {
+      navInstallBtn.addEventListener('click', function () { runInstallPrompt(); });
     }
 
     if (dismissBtn) {
@@ -97,12 +115,8 @@
     }
   });
 
-  // Expose for debugging / manual install
   window.CCInstall = {
-    prompt: function () {
-      var btn = document.getElementById('pwaInstallBtn');
-      if (btn) btn.click();
-    },
+    prompt: runInstallPrompt,
     isStandalone: isStandalone
   };
 })();

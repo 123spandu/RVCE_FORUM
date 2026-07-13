@@ -334,8 +334,26 @@ function sendRoleToSW() {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
-      const reg = await navigator.serviceWorker.register('/service-worker.js');
+      const reg = await navigator.serviceWorker.register('/service-worker.js?v=27');
       console.log('SW registered:', reg.scope);
+
+      // Force clients onto the latest shell after analytics/PWA fixes
+      try {
+        if (localStorage.getItem('cc_sw_cache_bust') !== 'v27') {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+          if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHES' });
+          }
+          localStorage.setItem('cc_sw_cache_bust', 'v27');
+          if (!sessionStorage.getItem('cc_sw_reloaded_v27')) {
+            sessionStorage.setItem('cc_sw_reloaded_v27', '1');
+            location.reload();
+            return;
+          }
+        }
+      } catch (_) { /* ignore */ }
+
       sendRoleToSW();
       navigator.serviceWorker.addEventListener('controllerchange', sendRoleToSW);
 

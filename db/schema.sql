@@ -154,7 +154,7 @@ CREATE TABLE IF NOT EXISTS assignments (
   INDEX idx_due (due_at)
 ) ENGINE=InnoDB;
 
--- 8c. Post Views / Clicks (Publisher Analytics)
+-- 8c. Post Views / Clicks (Publisher Analytics — real engagement only)
 CREATE TABLE IF NOT EXISTS post_views (
   id INT AUTO_INCREMENT PRIMARY KEY,
   post_id INT NOT NULL,
@@ -163,7 +163,8 @@ CREATE TABLE IF NOT EXISTS post_views (
   FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_view_post_time (post_id, created_at),
-  INDEX idx_view_time (created_at)
+  INDEX idx_view_time (created_at),
+  INDEX idx_view_user_post_day (post_id, user_id, created_at)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS post_clicks (
@@ -174,7 +175,8 @@ CREATE TABLE IF NOT EXISTS post_clicks (
   FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_click_post_time (post_id, created_at),
-  INDEX idx_click_time (created_at)
+  INDEX idx_click_time (created_at),
+  INDEX idx_click_user_post_day (post_id, user_id, created_at)
 ) ENGINE=InnoDB;
 
 -- 9. Stories Table

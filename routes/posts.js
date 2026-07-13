@@ -122,7 +122,12 @@ router.get('/', authRequired, async (req, res) => {
 router.post('/', authRequired, requirePublisher, upload.single('image'), async (req, res) => {
   try {
     const { title, content, target_type, post_type, post_level, department_ids, club_ids, expires_at, scheduled_at, visibility, target_channel_ids } = req.body || {};
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    // Prefer uploaded file; allow share-target / reused upload path via image_url
+    let imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    if (!imageUrl && req.body && req.body.image_url) {
+      const raw = String(req.body.image_url).trim();
+      if (/^\/uploads\/[A-Za-z0-9._-]+$/.test(raw)) imageUrl = raw;
+    }
 
     // Map UI variables to backend schema variables
     const body = content;
@@ -306,6 +311,60 @@ router.get('/bookmarks', authRequired, async (req, res) => {
     res.json({ bookmarks: rows });
   } catch (err) {
     console.error('List bookmarks error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/posts/:id — deep links (push click, share URL, web+rvce protocol)
+// MUST stay below /stories and /bookmarks so those paths are not captured as ids.
+router.get('/:id', authRequired, async (req, res) => {
+  try {
+    const postId = Number(req.params.id);
+    if (!Number.isInteger(postId) || postId <= 0) {
+      return res.status(400).json({ error: 'Invalid post id' });
+    }
+    const me = req.user;
+    const sql = `
+      SELECT p.id, p.title, p.body AS content, p.level AS target_type, p.type AS post_type, p.image_url, p.is_pinned, p.created_at,
+             p.expires_at,
+             (p.expires_at IS NOT NULL AND p.expires_at <= NOW()) AS is_expired,
+             (p.is_published = FALSE OR (p.scheduled_at IS NOT NULL AND p.scheduled_at > NOW())) AS is_scheduled,
+             p.scheduled_at,
+             p.is_published,
+             u.full_name AS publisher_name,
+             COALESCE(c.name, p.community_name) AS community_name,
+             c.name AS publisher_department, c.type AS channel_type,
+             (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS like_count,
+             (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id AND l.user_id = ?) AS liked_by_me,
+             (SELECT COUNT(*) FROM bookmarks b WHERE b.post_id = p.id) AS bookmark_count,
+             (SELECT COUNT(*) FROM bookmarks b WHERE b.post_id = p.id AND b.user_id = ?) AS bookmarked_by_me,
+             (SELECT COUNT(*) FROM subscriptions s
+                WHERE s.channel_id = p.channel_id AND s.subscriber_id = ? AND s.status = 'approved') AS is_subscribed,
+             (SELECT GROUP_CONCAT(ch.name ORDER BY ch.name SEPARATOR ', ')
+                FROM post_target_channels ptc
+                JOIN channels ch ON ch.id = ptc.channel_id
+                WHERE ptc.post_id = p.id) AS audience_names,
+             (SELECT COUNT(*) FROM post_target_channels ptc WHERE ptc.post_id = p.id) AS audience_count
+      FROM posts p
+      JOIN users u ON p.publisher_id = u.id
+      LEFT JOIN channels c ON c.id = p.channel_id
+      WHERE p.id = ?
+      LIMIT 1
+    `;
+    const [rows] = await pool.query(sql, [me.id, me.id, me.id, postId]);
+    if (!rows.length) return res.status(404).json({ error: 'Post not found' });
+    const r = rows[0];
+    r.liked_by_me = Number(r.liked_by_me) > 0;
+    r.bookmarked_by_me = Number(r.bookmarked_by_me) > 0;
+    r.is_expired = Number(r.is_expired) > 0;
+    r.is_scheduled = Number(r.is_scheduled) > 0;
+    r.is_published = r.is_published === undefined ? true : Number(r.is_published) > 0;
+    r.is_subscribed = Number(r.is_subscribed) > 0;
+    r.audience_count = Number(r.audience_count) || 0;
+    r.audience_names = r.audience_names || null;
+    res.json({ post: r });
+  } catch (err) {
+    console.error('Get post error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
